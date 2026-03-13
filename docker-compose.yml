@@ -1,0 +1,60 @@
+services:
+  database:
+    image: mysql:8.0
+    container_name: trackledger-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-trackledger}
+      MYSQL_USER: ${DB_USER:-trackledger}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-trackledger}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: trackledger-server
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: mysql://${DB_USER:-trackledger}:${DB_PASSWORD:-trackledger}@database:3306/${DB_NAME:-trackledger}
+    ports:
+      - "3001:3000"
+    depends_on:
+      database:
+        condition: service_healthy
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: trackledger-client
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    depends_on:
+      - server
+
+  adminer:
+    image: adminer:latest
+    container_name: trackledger-adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: database
+
+volumes:
+  mysql_data:
