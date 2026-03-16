@@ -8,8 +8,28 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
+  id                   Int       @id @default(autoincrement())
+  email                String    @unique
+  name                 String?
+  googleId             String?   @unique
+  googleAccessToken    String?   @db.Text
+  googleRefreshToken   String?   @db.Text
+  selectedCalendarId   String?   // Google calendar ID (bijv. primary of id@group.calendar.google.com)
+  createdAt            DateTime  @default(now())
+  events               CalendarEvent[]
+}
+
+model CalendarEvent {
+  id            Int      @id @default(autoincrement())
+  googleEventId String?
+  calendarId    String   @default("primary") // welke Google-agenda dit event hoort
+  title         String
+  description   String?  @db.Text
+  start         DateTime
+  end          DateTime
+  location      String?
+  userId        Int
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

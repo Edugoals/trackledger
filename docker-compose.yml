@@ -27,6 +27,11 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       DATABASE_URL: mysql://${DB_USER:-trackledger}:${DB_PASSWORD:-trackledger}@database:3306/${DB_NAME:-trackledger}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:3001/api/auth/google/callback}
+      CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
+      SESSION_SECRET: ${SESSION_SECRET:-trackledger-dev}
     ports:
       - "3001:3000"
     depends_on:
