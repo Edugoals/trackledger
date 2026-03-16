@@ -14,14 +14,21 @@ function requireAuth(req, res, next) {
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
+  const customerId = req.query.customerId ? parseInt(req.query.customerId) : null;
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.session.userId },
-      select: { selectedCalendarId: true },
-    });
-    if (!user?.selectedCalendarId) return res.json([]);
+    if (customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: customerId, userId: req.session.userId },
+      });
+      if (!customer?.selectedCalendarId) return res.json([]);
+      const events = await prisma.calendarEvent.findMany({
+        where: { userId: req.session.userId, customerId, calendarId: customer.selectedCalendarId },
+        orderBy: { start: 'asc' },
+      });
+      return res.json(events);
+    }
     const events = await prisma.calendarEvent.findMany({
-      where: { userId: req.session.userId, calendarId: user.selectedCalendarId },
+      where: { userId: req.session.userId },
       orderBy: { start: 'asc' },
     });
     res.json(events);
@@ -47,19 +54,23 @@ function toAmsterdamISO(dateInput) {
 }
 
 router.post('/', async (req, res) => {
-  const { title, description, start, end, location } = req.body;
-  if (!title || !start || !end) return res.status(400).json({ error: 'title, start, end verplicht' });
+  const { customerId, title, description, start, end, location } = req.body;
+  if (!customerId || !title || !start || !end) return res.status(400).json({ error: 'customerId, title, start, end verplicht' });
 
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.session.userId } });
-    if (!user?.selectedCalendarId) return res.status(400).json({ error: 'Kies eerst een agenda' });
+    const customer = await prisma.customer.findFirst({
+      where: { id: parseInt(customerId), userId: req.session.userId },
+    });
+    if (!customer?.selectedCalendarId) return res.status(400).json({ error: 'Kies eerst een agenda voor deze klant' });
 
+    const user = await prisma.user.findUnique({ where: { id: req.session.userId } });
     const startDate = new Date(start);
     const endDate = new Date(end);
-    const calendarId = user.selectedCalendarId;
+    const calendarId = customer.selectedCalendarId;
     const event = await prisma.calendarEvent.create({
       data: {
         userId: req.session.userId,
+        customerId: customer.id,
         calendarId,
         title,
         description: description || null,
@@ -153,8 +164,10 @@ router.delete('/:id', async (req, res) => {
 });
 
 router.post('/sync', async (req, res) => {
+  const customerId = req.body?.customerId ?? req.query?.customerId;
+  if (!customerId) return res.status(400).json({ error: 'customerId verplicht' });
   try {
-    const result = await syncFromGoogle(req.session.userId);
+    const result = await syncFromGoogle(req.session.userId, parseInt(customerId));
     res.json(result);
   } catch (e) {
     res.status(500).json({ error: e.message });

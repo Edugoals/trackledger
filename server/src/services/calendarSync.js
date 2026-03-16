@@ -25,14 +25,15 @@ function fromGoogleEvent(g, calendarId) {
   };
 }
 
-export async function syncFromGoogle(userId) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+export async function syncFromGoogle(userId, customerId) {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, userId },
   });
   if (!user?.googleAccessToken) throw new Error('Geen Google-koppeling');
-  if (!user?.selectedCalendarId) throw new Error('Kies eerst een agenda');
+  if (!customer?.selectedCalendarId) throw new Error('Kies eerst een agenda voor deze klant');
 
-  const calendarId = user.selectedCalendarId;
+  const calendarId = customer.selectedCalendarId;
   const calendar = getCalendarClient(user.googleAccessToken, user.googleRefreshToken);
 
   const { data } = await calendar.events.list({
@@ -45,28 +46,31 @@ export async function syncFromGoogle(userId) {
   for (const ge of data.items || []) {
     const payload = fromGoogleEvent(ge, calendarId);
     const existing = await prisma.calendarEvent.findFirst({
-      where: { userId, calendarId, googleEventId: ge.id },
+      where: { userId, customerId, calendarId, googleEventId: ge.id },
     });
     if (existing) {
       await prisma.calendarEvent.update({ where: { id: existing.id }, data: payload });
     } else {
-      await prisma.calendarEvent.create({ data: { ...payload, userId } });
+      await prisma.calendarEvent.create({ data: { ...payload, userId, customerId } });
     }
     count++;
   }
   return { synced: count };
 }
 
-export async function syncToGoogle(userId) {
+export async function syncToGoogle(userId, customerId) {
   const user = await prisma.user.findUnique({ where: { id: userId } });
+  const customer = await prisma.customer.findFirst({
+    where: { id: customerId, userId },
+  });
   if (!user?.googleAccessToken) throw new Error('Geen Google-koppeling');
-  if (!user?.selectedCalendarId) throw new Error('Kies eerst een agenda');
+  if (!customer?.selectedCalendarId) throw new Error('Kies eerst een agenda voor deze klant');
 
-  const calendarId = user.selectedCalendarId;
+  const calendarId = customer.selectedCalendarId;
   const calendar = getCalendarClient(user.googleAccessToken, user.googleRefreshToken);
 
   const localEvents = await prisma.calendarEvent.findMany({
-    where: { userId, calendarId, start: { gte: new Date() } },
+    where: { userId, customerId, calendarId, start: { gte: new Date() } },
   });
 
   for (const event of localEvents) {

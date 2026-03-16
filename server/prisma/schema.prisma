@@ -8,28 +8,68 @@ datasource db {
 }
 
 model User {
-  id                   Int       @id @default(autoincrement())
-  email                String    @unique
+  id                   Int        @id @default(autoincrement())
+  email                String     @unique
   name                 String?
-  googleId             String?   @unique
-  googleAccessToken    String?   @db.Text
-  googleRefreshToken   String?   @db.Text
-  selectedCalendarId   String?   // Google calendar ID (bijv. primary of id@group.calendar.google.com)
-  createdAt            DateTime  @default(now())
+  googleId             String?    @unique
+  googleAccessToken    String?    @db.Text
+  googleRefreshToken   String?    @db.Text
+  selectedCalendarId   String?
+  createdAt            DateTime   @default(now())
   events               CalendarEvent[]
+  customers            Customer[]
+}
+
+model Customer {
+  id                 Int             @id @default(autoincrement())
+  name               String
+  email              String?
+  phone              String?
+  selectedCalendarId String?         // gekoppelde Google-agenda
+  userId             Int
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobs               Job[]
+  tracks             Track[]
+  calendarEvents     CalendarEvent[]
+  createdAt          DateTime        @default(now())
+}
+
+model Job {
+  id         Int      @id @default(autoincrement())
+  name       String   @unique
+  startDate  DateTime
+  endDate    DateTime
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  tracks     Track[]
+  createdAt  DateTime @default(now())
+}
+
+model Track {
+  id         Int      @id @default(autoincrement())
+  name       String
+  jobId      Int
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([customerId, name])
 }
 
 model CalendarEvent {
-  id            Int      @id @default(autoincrement())
+  id            Int       @id @default(autoincrement())
   googleEventId String?
-  calendarId    String   @default("primary") // welke Google-agenda dit event hoort
+  calendarId    String    @default("primary")
   title         String
-  description   String?  @db.Text
+  description   String?   @db.Text
   start         DateTime
   end          DateTime
   location      String?
   userId        Int
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customerId    Int?      // gekoppeld aan klant
+  customer      Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }

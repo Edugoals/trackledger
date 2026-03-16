@@ -5,6 +5,9 @@ import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth.js';
 import eventsRoutes from './routes/events.js';
 import calendarsRoutes from './routes/calendars.js';
+import customersRoutes from './routes/customers.js';
+import jobsRoutes from './routes/jobs.js';
+import tracksRoutes from './routes/tracks.js';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -30,6 +33,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/calendars', calendarsRoutes);
 app.use('/api/events', eventsRoutes);
+app.use('/api/customers', customersRoutes);
+app.use('/api/jobs', jobsRoutes);
+app.use('/api/tracks', tracksRoutes);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}`);
