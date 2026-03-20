@@ -18,6 +18,7 @@ model User {
   createdAt            DateTime   @default(now())
   events               CalendarEvent[]
   customers            Customer[]
+  tasks                Task[]
 }
 
 model Customer {
@@ -46,15 +47,56 @@ model Job {
 }
 
 model Track {
-  id         Int      @id @default(autoincrement())
+  id         Int         @id @default(autoincrement())
   name       String
   jobId      Int
-  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  job        Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
   customerId Int
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  trackTasks TrackTask[]
+  createdAt  DateTime    @default(now())
 
   @@unique([customerId, name])
+}
+
+enum TrackTaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+}
+
+model Task {
+  id                   Int         @id @default(autoincrement())
+  name                 String
+  slug                 String?
+  description          String?     @db.Text
+  defaultEstimatedHours Decimal?   @db.Decimal(10, 2)
+  isActive             Boolean     @default(true)
+  userId               Int
+  user                 User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  trackTasks           TrackTask[]
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@unique([userId, slug])
+}
+
+model TrackTask {
+  id              Int             @id @default(autoincrement())
+  trackId         Int
+  track           Track           @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  taskId          Int
+  task            Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  titleOverride   String?
+  notes           String?         @db.Text
+  estimatedHours  Decimal?       @db.Decimal(10, 2)
+  actualHours     Decimal        @default(0) @db.Decimal(10, 2)
+  status          TrackTaskStatus @default(NOT_STARTED)
+  sortOrder       Int             @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([trackId, taskId])
 }
 
 model CalendarEvent {

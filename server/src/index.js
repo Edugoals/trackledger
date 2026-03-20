@@ -8,6 +8,8 @@ import calendarsRoutes from './routes/calendars.js';
 import customersRoutes from './routes/customers.js';
 import jobsRoutes from './routes/jobs.js';
 import tracksRoutes from './routes/tracks.js';
+import tasksRoutes from './routes/tasks.js';
+import trackTasksRoutes from './routes/trackTasks.js';
 
 const prisma = new PrismaClient();
 const app = express();
@@ -35,7 +37,9 @@ app.use('/api/calendars', calendarsRoutes);
 app.use('/api/events', eventsRoutes);
 app.use('/api/customers', customersRoutes);
 app.use('/api/jobs', jobsRoutes);
+app.use('/api', trackTasksRoutes); // /api/tracks/:trackId/tasks, /api/track-tasks/:id (before /api/tracks)
 app.use('/api/tracks', tracksRoutes);
+app.use('/api/tasks', tasksRoutes);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}`);

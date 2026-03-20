@@ -24,29 +24,81 @@ async function ensureJobAccess(req, res, next) {
 
 router.get('/', async (req, res) => {
   const { customerId } = req.query;
-  if (!customerId) return res.status(400).json({ error: 'customerId verplicht' });
-  const customer = await prisma.customer.findFirst({
-    where: { id: parseInt(customerId), userId: req.session.userId },
-  });
-  if (!customer) return res.status(404).json({ error: 'Klant niet gevonden' });
   try {
+    if (customerId) {
+      const customer = await prisma.customer.findFirst({
+        where: { id: parseInt(customerId), userId: req.session.userId },
+      });
+      if (!customer) return res.status(404).json({ error: 'Klant niet gevonden' });
+      const jobs = await prisma.job.findMany({
+        where: { customerId: customer.id },
+        include: { _count: { select: { tracks: true } }, customer: { select: { name: true } } },
+        orderBy: { startDate: 'desc' },
+      });
+      const withStats = await addJobStats(jobs);
+      return res.json(withStats);
+    }
     const jobs = await prisma.job.findMany({
-      where: { customerId: customer.id },
-      include: { _count: { select: { tracks: true } } },
+      where: { customer: { userId: req.session.userId } },
+      include: { _count: { select: { tracks: true } }, customer: { select: { name: true } } },
       orderBy: { startDate: 'desc' },
     });
-    res.json(jobs);
+    const withStats = await addJobStats(jobs);
+    res.json(withStats);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+async function addJobStats(jobs) {
+  const result = [];
+  for (const job of jobs) {
+    const trackTasks = await prisma.trackTask.findMany({
+      where: { track: { jobId: job.id } },
+      select: { estimatedHours: true, actualHours: true },
+    });
+    const totalEstimated = trackTasks.reduce((s, tt) => s + (parseFloat(tt.estimatedHours) || 0), 0);
+    const totalActual = trackTasks.reduce((s, tt) => s + (parseFloat(tt.actualHours) || 0), 0);
+    const hoursDifference = totalActual - totalEstimated;
+    const overrunPercentage = totalEstimated > 0 ? (hoursDifference / totalEstimated) * 100 : null;
+    result.push({
+      ...job,
+      totalEstimatedHours: totalEstimated,
+      totalActualHours: totalActual,
+      hoursDifference,
+      overrunPercentage,
+    });
+  }
+  return result;
+}
+
 router.get('/:id', ensureJobAccess, async (req, res) => {
   const job = await prisma.job.findUnique({
     where: { id: req.job.id },
-    include: { customer: true, tracks: true },
+    include: {
+      customer: true,
+      tracks: {
+        include: {
+          trackTasks: {
+            include: { task: true },
+            orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+          },
+        },
+      },
+    },
   });
-  res.json(job);
+  const tracksWithStats = (job.tracks || []).map((t) => {
+    const totalEstimated = t.trackTasks.reduce((s, tt) => s + (parseFloat(tt.estimatedHours) || 0), 0);
+    const totalActual = t.trackTasks.reduce((s, tt) => s + (parseFloat(tt.actualHours) || 0), 0);
+    return {
+      ...t,
+      totalEstimatedHours: totalEstimated,
+      totalActualHours: totalActual,
+      hoursDifference: totalActual - totalEstimated,
+      overrunPercentage: totalEstimated > 0 ? ((totalActual - totalEstimated) / totalEstimated) * 100 : null,
+    };
+  });
+  res.json({ ...job, tracks: tracksWithStats });
 });
 
 router.post('/', async (req, res) => {

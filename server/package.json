@@ -2,12 +2,16 @@
   "name": "trackledger-server",
   "version": "1.0.0",
   "type": "module",
+  "prisma": {
+    "seed": "node ./prisma/seed.js"
+  },
   "scripts": {
     "dev": "node --watch src/index.js",
     "start": "node src/index.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma db push --force-reset && prisma db seed",
+    "db:seed": "prisma db seed",
     "db:studio": "prisma studio"
   },
   "dependencies": {
