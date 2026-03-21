@@ -13,15 +13,25 @@ function toGoogleEvent(event) {
   };
 }
 
+function computeDurationMinutes(start, end) {
+  if (!start || !end) return null;
+  const a = new Date(start).getTime();
+  const b = new Date(end).getTime();
+  return Math.round((b - a) / 60000);
+}
+
 function fromGoogleEvent(g, calendarId) {
+  const start = new Date(g.start?.dateTime || g.start?.date);
+  const end = new Date(g.end?.dateTime || g.end?.date);
   return {
     googleEventId: g.id,
     calendarId,
     title: g.summary || '(Geen titel)',
     description: g.description || null,
-    start: new Date(g.start?.dateTime || g.start?.date),
-    end: new Date(g.end?.dateTime || g.end?.date),
+    start,
+    end,
     location: g.location || null,
+    durationMinutes: computeDurationMinutes(start, end),
   };
 }
 
@@ -49,7 +59,11 @@ export async function syncFromGoogle(userId, customerId) {
       where: { userId, customerId, calendarId, googleEventId: ge.id },
     });
     if (existing) {
-      await prisma.calendarEvent.update({ where: { id: existing.id }, data: payload });
+      const { googleEventId: _g, ...updateFields } = payload;
+      await prisma.calendarEvent.update({
+        where: { id: existing.id },
+        data: updateFields,
+      });
     } else {
       await prisma.calendarEvent.create({ data: { ...payload, userId, customerId } });
     }

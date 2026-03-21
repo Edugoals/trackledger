@@ -67,6 +67,7 @@ router.post('/', async (req, res) => {
     const startDate = new Date(start);
     const endDate = new Date(end);
     const calendarId = customer.selectedCalendarId;
+    const durationMinutes = Math.round((endDate - startDate) / 60000);
     const event = await prisma.calendarEvent.create({
       data: {
         userId: req.session.userId,
@@ -77,6 +78,7 @@ router.post('/', async (req, res) => {
         start: startDate,
         end: endDate,
         location: location || null,
+        durationMinutes,
       },
     });
 
@@ -138,6 +140,40 @@ router.put('/:id', async (req, res) => {
         ...(end != null && { end: new Date(end) }),
         ...(location != null && { location }),
       },
+    });
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.patch('/:id/assignment', async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { assignedTrackTaskId } = req.body;
+  const event = await prisma.calendarEvent.findFirst({
+    where: { id, userId: req.session.userId },
+    include: { customer: true },
+  });
+  if (!event) return res.status(404).json({ error: 'Event niet gevonden' });
+
+  let assignmentSource = 'UNASSIGNED';
+  let trackTaskId = null;
+  if (assignedTrackTaskId != null) {
+    const tt = await prisma.trackTask.findFirst({
+      where: { id: parseInt(assignedTrackTaskId) },
+      include: { track: true },
+    });
+    if (!tt || tt.track.customerId !== event.customerId) {
+      return res.status(400).json({ error: 'TrackTask hoort niet bij dezelfde klant als dit event' });
+    }
+    trackTaskId = tt.id;
+    assignmentSource = 'MANUAL';
+  }
+
+  try {
+    const updated = await prisma.calendarEvent.update({
+      where: { id },
+      data: { assignedTrackTaskId: trackTaskId, assignmentSource },
     });
     res.json(updated);
   } catch (e) {

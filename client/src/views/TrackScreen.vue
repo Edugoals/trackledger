@@ -18,14 +18,24 @@
         />
         <TrackTaskList
           :track-tasks="trackTasks"
+          :events="trackEvents"
           :loading="trackTasksLoading"
           @add-task="showAddTask = true"
           @update="updateTrackTask"
           @edit-notes="openNotesEdit"
           @remove="removeTrackTask"
+          @unassign="(ev) => assignEvent({ eventId: ev.id, assignedTrackTaskId: null })"
         />
         <TrackInsightsPanel :aggregation="aggregation" />
       </div>
+      <MappedEventsSection
+        v-if="track"
+        :events="trackEvents"
+        :suggested-assignments="suggestedAssignments"
+        :track-tasks="trackTasks"
+        @assign="assignEvent"
+        @refresh="loadTrackEvents"
+      />
     </template>
 
     <div v-if="showNotesModal" class="modal">
@@ -78,6 +88,7 @@ import { api } from '../api'
 import TaskLibrary from '../components/TaskLibrary.vue'
 import TrackTaskList from '../components/TrackTaskList.vue'
 import TrackInsightsPanel from '../components/TrackInsightsPanel.vue'
+import MappedEventsSection from '../components/MappedEventsSection.vue'
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId)
@@ -86,7 +97,9 @@ const trackId = computed(() => route.params.trackId)
 const track = ref(null)
 const projectName = ref('')
 const trackTasks = ref([])
-const aggregation = ref({ totalEstimatedHours: 0, totalActualHours: 0, hoursDifference: 0, overrunPercentage: null })
+const trackEvents = ref([])
+const suggestedAssignments = ref({})
+const aggregation = ref({ totalEstimatedHours: 0, totalActualHours: 0, hoursDifference: 0, overrunPercentage: null, unassignedEventHours: 0 })
 const tasks = ref([])
 const loading = ref(true)
 const trackTasksLoading = ref(false)
@@ -132,12 +145,39 @@ async function loadTrackTasks() {
     if (r.ok) {
       const data = await r.json()
       trackTasks.value = data.trackTasks || []
-      aggregation.value = data.aggregation || aggregation.value
+      aggregation.value = { ...aggregation.value, ...data.aggregation }
     }
   } catch (e) {
     console.error(e)
   }
   trackTasksLoading.value = false
+}
+
+async function loadTrackEvents() {
+  if (!trackId.value) return
+  try {
+    const r = await api(`/api/tracks/${trackId.value}/events`)
+    if (r.ok) {
+      const data = await r.json()
+      trackEvents.value = data.events || []
+      suggestedAssignments.value = data.suggestedAssignments || {}
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function assignEvent({ eventId, assignedTrackTaskId }) {
+  const body = assignedTrackTaskId != null ? { assignedTrackTaskId } : { assignedTrackTaskId: null }
+  const r = await api(`/api/events/${eventId}/assignment`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (r.ok) {
+    await loadTrackEvents()
+    await loadTrackTasks()
+  }
 }
 
 async function loadTasks() {
@@ -245,11 +285,15 @@ onMounted(() => {
 watch(trackId, () => {
   loadTrack()
   loadTrackTasks()
+  loadTrackEvents()
 })
 
 watch(track, (t) => {
   if (t?.job?.customer) projectName.value = t.job.customer.name
-  if (t) loadTrackTasks()
+  if (t) {
+    loadTrackTasks()
+    loadTrackEvents()
+  }
 })
 </script>
 

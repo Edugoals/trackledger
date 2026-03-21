@@ -13,9 +13,11 @@
         v-for="tt in trackTasks"
         :key="tt.id"
         :track-task="tt"
+        :mapped-events="(events || []).filter(e => e.assignedTrackTaskId === tt.id)"
         @update="(patch) => $emit('update', tt, patch)"
         @edit-notes="$emit('edit-notes', tt)"
         @remove="$emit('remove', tt)"
+        @unassign="$emit('unassign', $event)"
       />
     </div>
   </section>
@@ -26,10 +28,11 @@ import TrackTaskCard from './TrackTaskCard.vue'
 
 defineProps({
   trackTasks: { type: Array, default: () => [] },
+  events: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
 })
 
-defineEmits(['add-task', 'update', 'edit-notes', 'remove'])
+defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign'])
 </script>
 
 <style scoped>

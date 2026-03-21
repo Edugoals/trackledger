@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { suggestTrackTaskFromTitle } from '../services/eventAssignment.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -41,23 +42,120 @@ function parseDecimal(val) {
   return isNaN(n) ? null : n;
 }
 
-function computeTrackAggregation(trackTasks) {
+function computeDurationMinutes(event) {
+  if (event.durationMinutes != null) return event.durationMinutes;
+  if (event.start && event.end) return Math.round((new Date(event.end) - new Date(event.start)) / 60000);
+  return 0;
+}
+
+function computeTrackAggregation(trackTasks, eventDerivedActuals = {}, unmappedMinutes = 0) {
   const totalEstimated = trackTasks.reduce((s, tt) => s + (parseFloat(tt.estimatedHours) || 0), 0);
-  const totalActual = trackTasks.reduce((s, tt) => s + (parseFloat(tt.actualHours) || 0), 0);
+  const totalActualFromEvents = Object.values(eventDerivedActuals).reduce((s, h) => s + h, 0);
+  const totalActualManual = trackTasks.reduce((s, tt) => s + (parseFloat(tt.actualHours) || 0), 0);
+  const totalActual = totalActualFromEvents > 0 ? totalActualFromEvents : totalActualManual;
   const hoursDifference = totalActual - totalEstimated;
   const overrunPercentage = totalEstimated > 0 ? (hoursDifference / totalEstimated) * 100 : null;
-  return { totalEstimatedHours: totalEstimated, totalActualHours: totalActual, hoursDifference, overrunPercentage };
+  const unassignedHours = unmappedMinutes / 60;
+  return {
+    totalEstimatedHours: totalEstimated,
+    totalActualHours: totalActual,
+    hoursDifference,
+    overrunPercentage,
+    unassignedEventHours: unassignedHours,
+    unassignedEventMinutes: unmappedMinutes,
+  };
 }
 
 router.get('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
   try {
+    const track = req.track;
+    const customer = track.job?.customer || (await prisma.track.findUnique({ where: { id: track.id }, include: { job: { include: { customer: true } } } }))?.job?.customer;
+    const calendarId = customer?.selectedCalendarId;
+
     const trackTasks = await prisma.trackTask.findMany({
-      where: { trackId: req.track.id },
+      where: { trackId: track.id },
       include: { task: true },
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     });
-    const aggregation = computeTrackAggregation(trackTasks);
-    res.json({ trackTasks, aggregation });
+
+    const eventDerivedActuals = {};
+    let unmappedMinutes = 0;
+    const mappedCounts = {};
+
+    if (calendarId && track.customerId) {
+      const events = await prisma.calendarEvent.findMany({
+        where: { customerId: track.customerId, calendarId, userId: req.session.userId },
+        include: { assignedTrackTask: true },
+      });
+      for (const ev of events) {
+        const mins = computeDurationMinutes(ev);
+        if (ev.assignedTrackTaskId && ev.assignedTrackTask?.trackId === track.id) {
+          eventDerivedActuals[ev.assignedTrackTaskId] = (eventDerivedActuals[ev.assignedTrackTaskId] || 0) + mins / 60;
+          mappedCounts[ev.assignedTrackTaskId] = (mappedCounts[ev.assignedTrackTaskId] || 0) + 1;
+        } else if (!ev.assignedTrackTaskId) {
+          unmappedMinutes += mins;
+        }
+      }
+    }
+
+    const outTrackTasks = trackTasks.map((tt) => {
+      const fromEvents = eventDerivedActuals[tt.id] ?? 0;
+      const manual = parseFloat(tt.actualHours) || 0;
+      const actualHours = fromEvents > 0 ? fromEvents : manual;
+      return {
+        ...tt,
+        actualHoursFromEvents: fromEvents,
+        actualHours,
+        mappedEventCount: mappedCounts[tt.id] ?? 0,
+      };
+    });
+
+    const aggregation = computeTrackAggregation(trackTasks, eventDerivedActuals, unmappedMinutes);
+    res.json({ trackTasks: outTrackTasks, aggregation });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/tracks/:trackId/events', ensureTrackAccess, async (req, res) => {
+  try {
+    const track = req.track;
+    const customer = track.job?.customer || (await prisma.track.findUnique({ where: { id: track.id }, include: { job: { include: { customer: true } } } }))?.job?.customer;
+    const calendarId = customer?.selectedCalendarId;
+    if (!calendarId || !track.customerId) return res.json({ events: [], suggestedAssignments: {} });
+
+    const events = await prisma.calendarEvent.findMany({
+      where: { customerId: track.customerId, calendarId, userId: req.session.userId },
+      include: { assignedTrackTask: { include: { task: true } } },
+      orderBy: { start: 'asc' },
+    });
+
+    const trackTasks = await prisma.trackTask.findMany({
+      where: { trackId: track.id },
+      include: { task: true },
+    });
+
+    const suggestedAssignments = {};
+    const outEvents = events.map((ev) => {
+      const durationMinutes = computeDurationMinutes(ev);
+      const item = {
+        id: ev.id,
+        title: ev.title,
+        start: ev.start,
+        end: ev.end,
+        durationMinutes,
+        assignedTrackTaskId: ev.assignedTrackTaskId,
+        assignmentSource: ev.assignmentSource,
+        assignedTrackTask: ev.assignedTrackTask ? { id: ev.assignedTrackTask.id, task: ev.assignedTrackTask.task } : null,
+      };
+      if (!ev.assignedTrackTaskId && ev.title) {
+        const suggestion = suggestTrackTaskFromTitle(ev.title, trackTasks);
+        if (suggestion) suggestedAssignments[ev.id] = suggestion;
+      }
+      return item;
+    });
+
+    res.json({ events: outEvents, suggestedAssignments });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

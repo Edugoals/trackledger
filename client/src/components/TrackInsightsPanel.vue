@@ -6,8 +6,12 @@
       <strong>{{ formatHours(aggregation.totalEstimatedHours) }}h</strong>
     </div>
     <div class="stat-row">
-      <span>Actual</span>
+      <span>Actual <span v-if="hasCalendarSource" class="source-hint">(from calendar)</span></span>
       <strong>{{ formatHours(aggregation.totalActualHours) }}h</strong>
+    </div>
+    <div v-if="(aggregation.unassignedEventHours || 0) > 0" class="stat-row unassigned">
+      <span>Unassigned</span>
+      <strong>{{ formatHours(aggregation.unassignedEventHours) }}h</strong>
     </div>
     <div class="stat-row">
       <span>Difference</span>
@@ -22,15 +26,23 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed } from 'vue';
 import { formatHours, overrunStatus } from '../utils'
 
 const props = defineProps({
   aggregation: {
     type: Object,
-    default: () => ({ totalEstimatedHours: 0, totalActualHours: 0, hoursDifference: 0, overrunPercentage: null }),
+    default: () => ({
+      totalEstimatedHours: 0,
+      totalActualHours: 0,
+      hoursDifference: 0,
+      overrunPercentage: null,
+      unassignedEventHours: 0,
+    }),
   },
 })
+
+const hasCalendarSource = computed(() => (props.aggregation.totalActualHours || 0) > 0 || (props.aggregation.unassignedEventHours || 0) > 0)
 
 const status = computed(() =>
   overrunStatus(props.aggregation.totalEstimatedHours, props.aggregation.totalActualHours)
@@ -90,6 +102,8 @@ const statusLabel = computed(() => {
   font-size: 0.875rem;
 }
 .stat-row span { color: #6b7280; }
+.source-hint { font-weight: normal; font-size: 0.8em; }
+.stat-row.unassigned strong { color: #d97706; }
 .status-indicator.ok { color: #059669; }
 .status-indicator.warning { color: #d97706; }
 .status-indicator.overrun { color: #dc2626; }

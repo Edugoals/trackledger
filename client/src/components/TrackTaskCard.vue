@@ -5,6 +5,19 @@
       <span :class="['diff-badge', diffBadgeClass]">{{ diffBadgeText }}</span>
     </div>
     <p v-if="trackTask.notes" class="notes">{{ trackTask.notes }}</p>
+    <div v-if="mappedEventCount > 0" class="mapped-events-inline">
+      <button type="button" class="btn-expand" @click="expanded = !expanded">
+        {{ mappedEventCount }} event{{ mappedEventCount !== 1 ? 's' : '' }} from calendar
+      </button>
+      <div v-if="expanded" class="event-list">
+        <div v-for="ev in mappedEvents" :key="ev.id" class="event-item">
+          <span class="ev-title">{{ ev.title }}</span>
+          <span class="ev-meta">{{ formatDate(ev.start) }} · {{ formatDuration(ev.durationMinutes) }}</span>
+          <span :class="['ev-source', ev.assignmentSource?.toLowerCase()]">{{ ev.assignmentSource }}</span>
+          <button type="button" class="btn-unassign" @click="$emit('unassign', ev)">Unassign</button>
+        </div>
+      </div>
+    </div>
     <div class="meta">
       <span class="est">
         Est: <input
@@ -21,10 +34,13 @@
           type="number"
           step="0.5"
           min="0"
-          :value="trackTask.actualHours ?? ''"
+          :value="displayActualHours"
           @change="onActChange"
           class="inline-input"
+          :readonly="hasEventDerivedActuals"
+          :title="hasEventDerivedActuals ? 'From calendar events (sync in Customers)' : 'Manual'"
         />h
+        <span v-if="hasEventDerivedActuals" class="from-calendar" title="From calendar">📅</span>
       </span>
       <select :value="trackTask.status" @change="onStatusChange" class="status-select">
         <option value="NOT_STARTED">Not started</option>
@@ -40,21 +56,37 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { formatHours, overrunStatus } from '../utils'
+import { ref, computed } from 'vue'
+import { formatHours, formatDate, overrunStatus } from '../utils'
 
 const props = defineProps({
   trackTask: { type: Object, required: true },
+  mappedEvents: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['update', 'edit-notes', 'remove'])
+const emit = defineEmits(['update', 'edit-notes', 'remove', 'unassign'])
+
+const expanded = ref(false)
+
+const mappedEventCount = computed(() => props.mappedEvents?.length ?? props.trackTask.mappedEventCount ?? 0)
+
+const displayActualHours = computed(() => props.trackTask.actualHours ?? props.trackTask.actualHoursFromEvents ?? '')
+
+const hasEventDerivedActuals = computed(() => (props.trackTask.actualHoursFromEvents ?? 0) > 0)
+
+function formatDuration(mins) {
+  if (mins == null) return '—'
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
 
 const displayName = computed(() =>
   props.trackTask.titleOverride?.trim() || props.trackTask.task?.name || 'Task'
 )
 
 const status = computed(() =>
-  overrunStatus(props.trackTask.estimatedHours, props.trackTask.actualHours)
+  overrunStatus(props.trackTask.estimatedHours, props.trackTask.actualHours ?? props.trackTask.actualHoursFromEvents)
 )
 
 const statusClass = computed(() => `status-${status.value}`)
@@ -67,7 +99,7 @@ const diffBadgeClass = computed(() => {
 
 const diffBadgeText = computed(() => {
   const est = parseFloat(props.trackTask.estimatedHours)
-  const act = parseFloat(props.trackTask.actualHours)
+  const act = parseFloat(props.trackTask.actualHours ?? props.trackTask.actualHoursFromEvents)
   if (isNaN(est) || isNaN(act)) return ''
   const d = act - est
   if (d === 0) return ''
@@ -153,4 +185,30 @@ function onStatusChange(e) {
 }
 .btn-small:hover { background: #e5e7eb; }
 .btn-small.danger { background: #fee2e2; border-color: #fecaca; color: #991b1b; }
+.mapped-events-inline { margin-top: 0.5rem; }
+.btn-expand {
+  font-size: 0.8rem;
+  padding: 0.2rem 0;
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.btn-expand:hover { color: #374151; }
+.event-list { margin-top: 0.5rem; padding-left: 0.5rem; border-left: 2px solid #e5e7eb; }
+.event-item { font-size: 0.8rem; margin-bottom: 0.25rem; }
+.ev-title { font-weight: 500; }
+.ev-meta { color: #6b7280; margin-left: 0.5rem; }
+.ev-source {
+  margin-left: 0.5rem;
+  font-size: 0.7rem;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+}
+.ev-source.auto { background: #dbeafe; color: #1d4ed8; }
+.ev-source.manual { background: #d1fae5; color: #065f46; }
+.btn-unassign { font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.25rem; background: #fef3c7; border: none; border-radius: 3px; cursor: pointer; }
+.btn-unassign:hover { background: #fde68a; }
+.from-calendar { font-size: 0.75rem; margin-left: 0.25rem; }
 </style>
