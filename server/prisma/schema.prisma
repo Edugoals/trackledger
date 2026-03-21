@@ -37,13 +37,15 @@ model Customer {
 
 model Job {
   id         Int      @id @default(autoincrement())
-  name       String   @unique
+  name       String
   startDate  DateTime
   endDate    DateTime
   customerId Int
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   tracks     Track[]
   createdAt  DateTime @default(now())
+
+  @@unique([customerId, name])
 }
 
 model Track {

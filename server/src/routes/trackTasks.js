@@ -162,7 +162,7 @@ router.get('/tracks/:trackId/events', ensureTrackAccess, async (req, res) => {
 });
 
 router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
-  const { taskId, titleOverride, notes, estimatedHours } = req.body;
+  const { taskId, notes, estimatedHours } = req.body;
   if (!taskId) return res.status(400).json({ error: 'taskId verplicht' });
   const task = await prisma.task.findFirst({
     where: { id: parseInt(taskId), userId: req.session.userId },
@@ -176,7 +176,6 @@ router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
       data: {
         trackId: req.track.id,
         taskId: task.id,
-        titleOverride: titleOverride?.trim() || null,
         notes: notes?.trim() || null,
         estimatedHours: hours,
       },
@@ -190,7 +189,7 @@ router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
 });
 
 router.patch('/track-tasks/:id', ensureTrackTaskAccess, async (req, res) => {
-  const { titleOverride, notes, estimatedHours, actualHours, status, sortOrder } = req.body;
+  const { notes, estimatedHours, actualHours, status, sortOrder } = req.body;
   const estHours = estimatedHours !== undefined ? parseDecimal(estimatedHours) : undefined;
   const actHours = actualHours !== undefined ? parseDecimal(actualHours) : undefined;
   if (estHours !== undefined && estHours !== null && estHours < 0) return res.status(400).json({ error: 'estimatedHours moet >= 0 zijn' });
@@ -200,7 +199,6 @@ router.patch('/track-tasks/:id', ensureTrackTaskAccess, async (req, res) => {
     const updated = await prisma.trackTask.update({
       where: { id: req.trackTask.id },
       data: {
-        ...(titleOverride !== undefined && { titleOverride: titleOverride?.trim() || null }),
         ...(notes !== undefined && { notes: notes?.trim() || null }),
         ...(estHours !== undefined && { estimatedHours: estHours }),
         ...(actHours !== undefined && { actualHours: actHours }),

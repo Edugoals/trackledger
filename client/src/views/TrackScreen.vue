@@ -20,6 +20,9 @@
           :track-tasks="trackTasks"
           :events="trackEvents"
           :loading="trackTasksLoading"
+          :syncing="syncing"
+          :can-sync="!!(track?.customer?.selectedCalendarId)"
+          @sync="syncGoogle"
           @add-task="showAddTask = true"
           @update="updateTrackTask"
           @edit-notes="openNotesEdit"
@@ -67,7 +70,6 @@
                 </option>
               </select>
             </label>
-            <label>Custom title <input v-model="addTaskForm.titleOverride" placeholder="optional override" /></label>
             <label>Est. hours <input v-model="addTaskForm.estimatedHours" type="number" step="0.5" min="0" placeholder="optional" /></label>
           </template>
           <button type="button" class="btn btn-outline btn-small" @click="showCustomTaskForm = true; showAddTask = false">Or create custom task</button>
@@ -82,13 +84,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api'
 import TaskLibrary from '../components/TaskLibrary.vue'
 import TrackTaskList from '../components/TrackTaskList.vue'
 import TrackInsightsPanel from '../components/TrackInsightsPanel.vue'
 import MappedEventsSection from '../components/MappedEventsSection.vue'
+import { headerContext } from '../stores/headerContext'
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId)
@@ -99,6 +102,7 @@ const projectName = ref('')
 const trackTasks = ref([])
 const trackEvents = ref([])
 const suggestedAssignments = ref({})
+const syncing = ref(false)
 const aggregation = ref({ totalEstimatedHours: 0, totalActualHours: 0, hoursDifference: 0, overrunPercentage: null, unassignedEventHours: 0 })
 const tasks = ref([])
 const loading = ref(true)
@@ -110,7 +114,7 @@ const showNotesModal = ref(false)
 const showAddTask = ref(false)
 const showCustomTaskForm = ref(false)
 const notesForm = ref({ trackTask: null, notes: '' })
-const addTaskForm = ref({ taskId: '', titleOverride: '', estimatedHours: '' })
+const addTaskForm = ref({ taskId: '', estimatedHours: '' })
 const customTaskName = ref('')
 const customTaskHours = ref('')
 
@@ -128,8 +132,10 @@ async function loadTrack() {
     if (!r.ok) { error.value = 'Failed to load'; return }
     const job = await r.json()
     projectName.value = job.customer?.name || job.name || ''
+    headerContext.selectedCustomerId = job.customer?.id ?? null
     const tid = parseInt(trackId.value)
-    track.value = job.tracks?.find(t => t.id === tid) || null
+    const t = job.tracks?.find(tr => tr.id === tid)
+    track.value = t ? { ...t, customer: job.customer } : null
     if (!track.value) error.value = 'Track not found'
   } catch (e) {
     error.value = e.message
@@ -165,6 +171,24 @@ async function loadTrackEvents() {
   } catch (e) {
     console.error(e)
   }
+}
+
+async function syncGoogle() {
+  const customerId = track.value?.customerId ?? track.value?.customer?.id
+  if (!customerId) return
+  syncing.value = true
+  try {
+    await api('/api/events/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ customerId }),
+    })
+    await loadTrackEvents()
+    await loadTrackTasks()
+  } catch (e) {
+    console.error(e)
+  }
+  syncing.value = false
 }
 
 async function assignEvent({ eventId, assignedTrackTaskId }) {
@@ -217,15 +241,14 @@ async function submitAddTask() {
     const taskId = parseInt(addTaskForm.value.taskId)
     if (!taskId) return
     const est = addTaskForm.value.estimatedHours ? parseFloat(addTaskForm.value.estimatedHours) : null
-    await addTaskToTrack(taskId, est, addTaskForm.value.titleOverride || null)
+    await addTaskToTrack(taskId, est)
   }
   closeAddTask()
 }
 
-async function addTaskToTrack(taskId, estimatedHours = null, titleOverride = null) {
+async function addTaskToTrack(taskId, estimatedHours = null) {
   const body = { taskId }
   if (estimatedHours != null) body.estimatedHours = estimatedHours
-  if (titleOverride) body.titleOverride = titleOverride
   const r = await api(`/api/tracks/${trackId.value}/tasks`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -237,7 +260,7 @@ async function addTaskToTrack(taskId, estimatedHours = null, titleOverride = nul
 function closeAddTask() {
   showAddTask.value = false
   showCustomTaskForm.value = false
-  addTaskForm.value = { taskId: '', titleOverride: '', estimatedHours: '' }
+  addTaskForm.value = { taskId: '', estimatedHours: '' }
   customTaskName.value = ''
   customTaskHours.value = ''
 }
@@ -289,7 +312,7 @@ watch(trackId, () => {
 })
 
 watch(track, (t) => {
-  if (t?.job?.customer) projectName.value = t.job.customer.name
+  if (t?.customer) projectName.value = t.customer.name
   if (t) {
     loadTrackTasks()
     loadTrackEvents()

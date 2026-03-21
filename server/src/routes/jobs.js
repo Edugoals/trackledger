@@ -121,7 +121,7 @@ router.post('/', async (req, res) => {
     });
     res.status(201).json(job);
   } catch (e) {
-    if (e.code === 'P2002') return res.status(400).json({ error: 'Opdrachtnaam bestaat al' });
+    if (e.code === 'P2002') return res.status(400).json({ error: 'Projectnaam bestaat al voor deze klant' });
     res.status(500).json({ error: e.message });
   }
 });
@@ -139,7 +139,7 @@ router.put('/:id', ensureJobAccess, async (req, res) => {
     });
     res.json(updated);
   } catch (e) {
-    if (e.code === 'P2002') return res.status(400).json({ error: 'Opdrachtnaam bestaat al' });
+    if (e.code === 'P2002') return res.status(400).json({ error: 'Projectnaam bestaat al voor deze klant' });
     res.status(500).json({ error: e.message });
   }
 });

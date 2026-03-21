@@ -18,6 +18,16 @@
           <router-link to="/tasks" class="nav-link">Tasks</router-link>
         </nav>
         <div class="header-actions">
+          <select
+            v-model="headerContext.selectedCustomerId"
+            class="sync-select"
+            title="Kies klant voor agenda-sync"
+          >
+            <option :value="null">— Klant voor sync —</option>
+            <option v-for="c in customers" :key="c.id" :value="c.id">
+              {{ c.name }}
+            </option>
+          </select>
           <button
             @click="sync"
             :disabled="syncing || !headerContext.selectedCustomerId"
@@ -45,9 +55,14 @@ import { headerContext } from './stores/headerContext'
 const loading = ref(true)
 const user = ref(null)
 const syncing = ref(false)
+const customers = ref([])
 
 const loginUrl = '/api/auth/google'
 
+async function loadCustomers() {
+  const r = await api('/api/customers')
+  if (r.ok) customers.value = await r.json()
+}
 
 async function loadUser() {
   const r = await api('/api/auth/me')
@@ -55,15 +70,16 @@ async function loadUser() {
 }
 
 async function sync() {
-  if (!headerContext.selectedCustomerId) return
+  const id = headerContext.selectedCustomerId
+  if (id == null || id === '') return
   syncing.value = true
   try {
     await api('/api/events/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ customerId: headerContext.selectedCustomerId }),
+      body: JSON.stringify({ customerId: parseInt(id) }),
     })
-    window.dispatchEvent(new CustomEvent('trackledger-sync-done'))
+    window.dispatchEvent(new CustomEvent('trackledger-sync-done', { detail: { customerId: parseInt(id) } }))
   } catch (e) {
     console.error(e)
   }
@@ -78,6 +94,7 @@ async function logout() {
 
 onMounted(async () => {
   await loadUser()
+  if (user.value) await loadCustomers()
   loading.value = false
 })
 </script>
@@ -106,6 +123,7 @@ h1 { color: #213547; margin: 0 0 1.5rem; }
 .nav-link:hover { background: #f3f4f6; }
 .nav-link.router-link-active { background: #213547; color: white; }
 .header-actions { display: flex; align-items: center; gap: 0.5rem; }
+.sync-select { padding: 0.3rem 0.5rem; border-radius: 6px; border: 1px solid #d1d5db; font-size: 0.9rem; }
 .btn { padding: 0.5rem 1rem; background: #213547; color: white; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block; }
 .btn:hover { background: #3a4f63; }
 .btn-small { font-size: 0.9rem; padding: 0.3rem 0.6rem; }

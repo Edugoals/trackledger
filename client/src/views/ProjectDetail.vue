@@ -28,6 +28,7 @@
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
+import { headerContext } from '../stores/headerContext'
 import TrackRow from '../components/TrackRow.vue'
 
 const route = useRoute()
@@ -43,8 +44,10 @@ async function load() {
   error.value = null
   try {
     const r = await api(`/api/jobs/${id}`)
-    if (r.ok) project.value = await r.json()
-    else error.value = 'Project not found'
+    if (r.ok) {
+      project.value = await r.json()
+      headerContext.selectedCustomerId = project.value.customer?.id ?? null
+    } else error.value = 'Project not found'
   } catch (e) {
     error.value = e.message
   }

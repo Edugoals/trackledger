@@ -2,7 +2,18 @@
   <section class="track-task-list">
     <div class="header">
       <h4>Track Plan</h4>
-      <button type="button" class="btn-add" @click="$emit('add-task')">+ Add Task</button>
+      <div class="header-actions">
+        <button
+          type="button"
+          class="btn-sync"
+          :disabled="syncing || !canSync"
+          @click="$emit('sync')"
+          title="Sync Google-agenda van deze klant"
+        >
+          {{ syncing ? 'Sync...' : 'Sync Google' }}
+        </button>
+        <button type="button" class="btn-add" @click="$emit('add-task')">+ Add Task</button>
+      </div>
     </div>
     <div v-if="loading" class="loading">Loading…</div>
     <div v-else-if="!trackTasks.length" class="empty">
@@ -26,13 +37,15 @@
 <script setup>
 import TrackTaskCard from './TrackTaskCard.vue'
 
-defineProps({
+const props = defineProps({
   trackTasks: { type: Array, default: () => [] },
   events: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
+  syncing: { type: Boolean, default: false },
+  canSync: { type: Boolean, default: false },
 })
 
-defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign'])
+defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign', 'sync'])
 </script>
 
 <style scoped>
@@ -61,6 +74,18 @@ defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign'])
   cursor: pointer;
 }
 .btn-add:hover { background: #3a4f63; }
+.header-actions { display: flex; gap: 0.5rem; align-items: center; }
+.btn-sync {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  background: transparent;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-sync:hover:not(:disabled) { background: #f3f4f6; border-color: #9ca3af; }
+.btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
 .loading, .empty { font-size: 0.9rem; color: #6b7280; padding: 1rem 0; }
 .list { display: flex; flex-direction: column; }
 </style>

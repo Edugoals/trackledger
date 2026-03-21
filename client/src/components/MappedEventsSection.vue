@@ -19,7 +19,7 @@
               >
                 <option value="">— Assign to —</option>
                 <option v-for="tt in trackTasks" :key="tt.id" :value="tt.id">
-                  {{ tt.titleOverride || tt.task?.name || 'Task' }}
+                  {{ tt.task?.name || 'Task' }}
                 </option>
               </select>
               <button

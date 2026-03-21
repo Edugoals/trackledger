@@ -82,7 +82,7 @@ function formatDuration(mins) {
 }
 
 const displayName = computed(() =>
-  props.trackTask.titleOverride?.trim() || props.trackTask.task?.name || 'Task'
+  props.trackTask.task?.name || 'Task'
 )
 
 const status = computed(() =>

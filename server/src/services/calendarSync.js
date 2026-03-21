@@ -52,6 +52,8 @@ export async function syncFromGoogle(userId, customerId) {
     maxResults: 100,
   });
 
+  const syncedGoogleIds = new Set((data.items || []).map((ge) => ge.id));
+
   let count = 0;
   for (const ge of data.items || []) {
     const payload = fromGoogleEvent(ge, calendarId);
@@ -69,7 +71,25 @@ export async function syncFromGoogle(userId, customerId) {
     }
     count++;
   }
-  return { synced: count };
+
+  let deletedCount = 0;
+  const idsToKeep = Array.from(syncedGoogleIds).filter(Boolean);
+  if (idsToKeep.length > 0) {
+    const { count } = await prisma.calendarEvent.deleteMany({
+      where: {
+        userId,
+        customerId,
+        calendarId,
+        AND: [
+          { googleEventId: { not: null } },
+          { googleEventId: { notIn: idsToKeep } },
+        ],
+      },
+    });
+    deletedCount = count;
+  }
+
+  return { synced: count, removed: deletedCount };
 }
 
 export async function syncToGoogle(userId, customerId) {
