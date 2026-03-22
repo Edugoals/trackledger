@@ -15,6 +15,11 @@
         <button type="button" class="btn-add" @click="$emit('add-task')">+ Add Task</button>
       </div>
     </div>
+    <TrackTimeline
+      v-if="!loading"
+      :events="events"
+      :track-tasks="trackTasks"
+    />
     <div v-if="loading" class="loading">Loading…</div>
     <div v-else-if="!trackTasks.length" class="empty">
       No tasks yet. Add from the library or create a custom one.
@@ -36,6 +41,7 @@
 
 <script setup>
 import TrackTaskCard from './TrackTaskCard.vue'
+import TrackTimeline from './TrackTimeline.vue'
 
 const props = defineProps({
   trackTasks: { type: Array, default: () => [] },

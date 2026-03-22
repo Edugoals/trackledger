@@ -12,6 +12,13 @@ export function formatHours(h) {
   return isNaN(n) ? '—' : n.toFixed(1)
 }
 
+export function formatDuration(mins) {
+  if (mins == null) return '—'
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return h > 0 ? `${h}h ${m}m` : `${m}m`
+}
+
 export function overrunStatus(totalEstimated, totalActual) {
   if (totalEstimated == null || totalEstimated <= 0) return 'neutral'
   const diff = (totalActual || 0) - totalEstimated
