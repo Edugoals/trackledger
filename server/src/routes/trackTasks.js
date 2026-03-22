@@ -194,7 +194,7 @@ router.patch('/tracks/:trackId/tasks/reorder', ensureTrackAccess, async (req, re
 });
 
 router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
-  const { taskId, notes, estimatedHours } = req.body;
+  const { taskId, notes, estimatedHours, insertIndex } = req.body;
   if (!taskId) return res.status(400).json({ error: 'taskId verplicht' });
   const task = await prisma.task.findFirst({
     where: { id: parseInt(taskId), userId: req.session.userId },
@@ -204,19 +204,31 @@ router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
   if (estHours !== null && estHours < 0) return res.status(400).json({ error: 'estimatedHours moet >= 0 zijn' });
   const hours = estHours ?? (task.defaultEstimatedHours ? parseFloat(task.defaultEstimatedHours) : null);
   try {
-    const maxOrder = await prisma.trackTask
-      .aggregate({
-        where: { trackId: req.track.id },
-        _max: { sortOrder: true },
-      })
-      .then((r) => (r._max.sortOrder ?? -1) + 1);
+    let sortOrder;
+    if (insertIndex !== undefined && insertIndex !== null && insertIndex !== '') {
+      const idx = parseInt(insertIndex);
+      if (isNaN(idx) || idx < 0) return res.status(400).json({ error: 'insertIndex moet >= 0 zijn' });
+      await prisma.trackTask.updateMany({
+        where: { trackId: req.track.id, sortOrder: { gte: idx } },
+        data: { sortOrder: { increment: 1 } },
+      });
+      sortOrder = idx;
+    } else {
+      const maxOrder = await prisma.trackTask
+        .aggregate({
+          where: { trackId: req.track.id },
+          _max: { sortOrder: true },
+        })
+        .then((r) => (r._max.sortOrder ?? -1) + 1);
+      sortOrder = maxOrder;
+    }
     const trackTask = await prisma.trackTask.create({
       data: {
         trackId: req.track.id,
         taskId: task.id,
         notes: notes?.trim() || null,
         estimatedHours: hours,
-        sortOrder: maxOrder,
+        sortOrder,
       },
       include: { task: true },
     });

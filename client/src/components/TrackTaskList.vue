@@ -21,20 +21,37 @@
       :track-tasks="trackTasks"
     />
     <div v-if="loading" class="loading">Loading…</div>
-    <div v-else-if="!trackTasks.length" class="empty">
-      No tasks yet. Add from the library or create a custom one.
-    </div>
-    <div v-else ref="listRef" class="list">
-      <TrackTaskCard
-        v-for="tt in trackTasks"
+    <div
+      v-else
+      ref="listRef"
+      class="list"
+      @dragover.prevent="onDragOver"
+      @drop="onListDrop"
+    >
+      <div
+        v-if="!trackTasks.length"
+        class="drop-placeholder"
+        @dragover.prevent="onDragOver"
+        @drop="onListDrop"
+      >
+        No tasks yet. Drop a task here.
+      </div>
+      <div
+        v-for="(tt, i) in trackTasks"
+        v-else
         :key="tt.id"
-        :track-task="tt"
-        :mapped-events="(events || []).filter(e => e.assignedTrackTaskId === tt.id)"
-        @update="(patch) => $emit('update', tt, patch)"
-        @edit-notes="$emit('edit-notes', tt)"
-        @remove="$emit('remove', tt)"
-        @unassign="$emit('unassign', $event)"
-      />
+        class="card-wrapper"
+        :data-index="i"
+      >
+        <TrackTaskCard
+          :track-task="tt"
+          :mapped-events="(events || []).filter(e => e.assignedTrackTaskId === tt.id)"
+          @update="(patch) => $emit('update', tt, patch)"
+          @edit-notes="$emit('edit-notes', tt)"
+          @remove="$emit('remove', tt)"
+          @unassign="$emit('unassign', $event)"
+        />
+      </div>
     </div>
   </section>
 </template>
@@ -53,43 +70,90 @@ const props = defineProps({
   canSync: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign', 'sync', 'reorder'])
+const emit = defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign', 'sync', 'reorder', 'insert-from-library'])
 
 const listRef = ref(null)
 let sortable = null
 
+function destroySortable() {
+  sortable?.destroy()
+  sortable = null
+}
+
+function onDragOver(ev) {
+  if (ev.dataTransfer?.types?.includes('application/x-trackledger-task')) {
+    ev.dataTransfer.dropEffect = 'copy'
+  }
+}
+
+function getInsertIndex(ev) {
+  if (!props.trackTasks.length) return 0
+  let el = ev.target
+  while (el && el !== listRef.value) {
+    const i = el.getAttribute?.('data-index')
+    if (i != null) {
+      const rect = el.getBoundingClientRect()
+      const midY = rect.top + rect.height / 2
+      return ev.clientY < midY ? parseInt(i, 10) : parseInt(i, 10) + 1
+    }
+    el = el.parentElement
+  }
+  return props.trackTasks.length
+}
+
+function onListDrop(ev) {
+  const raw = ev.dataTransfer?.getData?.('application/x-trackledger-task')
+  if (!raw) return
+  ev.preventDefault()
+  try {
+    const { taskId, defaultEstimatedHours } = JSON.parse(raw)
+    if (!taskId) return
+    const insertIndex = getInsertIndex(ev)
+    emit('insert-from-library', {
+      taskId: parseInt(taskId, 10),
+      defaultEstimatedHours: defaultEstimatedHours != null && !isNaN(defaultEstimatedHours)
+        ? defaultEstimatedHours
+        : null,
+      insertIndex,
+    })
+  } catch (_) {}
+}
+
+function initSortable() {
+  if (!listRef.value || sortable) return
+  sortable = Sortable.create(listRef.value, {
+    handle: '.drag-handle',
+    filter: '.drop-placeholder',
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    onEnd(evt) {
+      const items = [...props.trackTasks]
+      const [moved] = items.splice(evt.oldIndex, 1)
+      items.splice(evt.newIndex, 0, moved)
+      emit('reorder', items)
+    },
+  })
+}
+
 watch(
   () => [props.loading, props.trackTasks.length],
   () => {
-    if (props.trackTasks.length === 0) {
-      sortable?.destroy()
-      sortable = null
+    if (props.loading) {
+      destroySortable()
       return
     }
-    if (props.loading) return
     nextTick(() => {
-      if (listRef.value && !sortable) {
-        sortable = Sortable.create(listRef.value, {
-          handle: '.drag-handle',
-          animation: 150,
-          ghostClass: 'sortable-ghost',
-          chosenClass: 'sortable-chosen',
-          onEnd(evt) {
-            const items = [...props.trackTasks]
-            const [moved] = items.splice(evt.oldIndex, 1)
-            items.splice(evt.newIndex, 0, moved)
-            emit('reorder', items)
-          },
-        })
+      initSortable()
+      if (!sortable && listRef.value) {
+        setTimeout(initSortable, 50)
       }
     })
   },
-  { immediate: true }
+  { immediate: true, flush: 'post' }
 )
 
-onUnmounted(() => {
-  sortable?.destroy()
-})
+onUnmounted(destroySortable)
 </script>
 
 <style scoped>
@@ -130,8 +194,17 @@ onUnmounted(() => {
 }
 .btn-sync:hover:not(:disabled) { background: #f3f4f6; border-color: #9ca3af; }
 .btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
-.loading, .empty { font-size: 0.9rem; color: #6b7280; padding: 1rem 0; }
-.list { display: flex; flex-direction: column; }
+.loading { font-size: 0.9rem; color: #6b7280; padding: 1rem 0; }
+.list { display: flex; flex-direction: column; min-height: 80px; }
+.drop-placeholder {
+  padding: 1.5rem;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.9rem;
+  border: 2px dashed #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
 .list :deep(.sortable-ghost) { opacity: 0.5; background: #f3f4f6; }
 .list :deep(.sortable-chosen) { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 </style>

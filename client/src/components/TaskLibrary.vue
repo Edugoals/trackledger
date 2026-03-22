@@ -2,7 +2,15 @@
   <aside class="task-library">
     <h4>Task Library</h4>
     <ul v-if="tasks.length" class="task-list">
-      <li v-for="t in tasks" :key="t.id" class="task-item">
+      <li
+        v-for="t in tasks"
+        :key="t.id"
+        class="task-item"
+        :class="{ 'task-used': (usedTaskIds || []).includes(t.id) }"
+        :draggable="!(usedTaskIds || []).includes(t.id)"
+        @dragstart="onDragStart($event, t)"
+      >
+        <span class="task-drag" title="Drag to add to track">⋮⋮</span>
         <span class="task-name">{{ t.name }}</span>
       </li>
     </ul>
@@ -13,13 +21,28 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   tasks: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   showCustomTask: { type: Boolean, default: false },
+  usedTaskIds: { type: Array, default: () => [] },
 })
 
 defineEmits(['add', 'create-custom'])
+
+function onDragStart(ev, task) {
+  if ((props.usedTaskIds || []).includes(task.id)) {
+    ev.preventDefault()
+    return
+  }
+  const payload = {
+    taskId: task.id,
+    taskName: task.name,
+    defaultEstimatedHours: task.defaultEstimatedHours ?? null,
+  }
+  ev.dataTransfer.setData('application/x-trackledger-task', JSON.stringify(payload))
+  ev.dataTransfer.effectAllowed = 'copy'
+}
 </script>
 
 <style scoped>
@@ -46,7 +69,18 @@ defineEmits(['add', 'create-custom'])
   font-size: 0.875rem;
 }
 .task-item:last-child { border-bottom: none; }
+.task-item.task-used { opacity: 0.5; cursor: not-allowed; }
+.task-drag {
+  flex-shrink: 0;
+  cursor: grab;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  user-select: none;
+}
+.task-drag:active { cursor: grabbing; }
 .task-name { flex: 1; }
+.task-ghost { opacity: 0.6; }
+.task-chosen { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
 .empty { font-size: 0.85rem; color: #6b7280; margin: 0.5rem 0 0; }
 .btn-custom {
   margin-top: 0.75rem;

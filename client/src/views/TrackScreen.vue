@@ -13,6 +13,7 @@
           :tasks="tasks"
           :loading="tasksLoading"
           :show-custom-task="true"
+          :used-task-ids="usedTaskIds"
           @add="addTask"
           @create-custom="showCustomTaskForm = true"
         />
@@ -29,6 +30,7 @@
           @remove="removeTrackTask"
           @unassign="(ev) => assignEvent({ eventId: ev.id, assignedTrackTaskId: null })"
           @reorder="onTrackTasksReorder"
+          @insert-from-library="onInsertFromLibrary"
         />
         <TrackInsightsPanel :aggregation="aggregation" />
       </div>
@@ -123,6 +125,8 @@ const availableTasks = computed(() => {
   const used = new Set(trackTasks.value.map(tt => tt.taskId))
   return tasks.value.filter(t => !used.has(t.id))
 })
+
+const usedTaskIds = computed(() => trackTasks.value.map(tt => tt.taskId))
 
 async function loadTrack() {
   if (!trackId.value || !projectId.value) return
@@ -311,6 +315,23 @@ async function onTrackTasksReorder(newList) {
     body: JSON.stringify({ trackTaskIds: ids }),
   })
   if (!r.ok) await loadTrackTasks()
+}
+
+async function onInsertFromLibrary({ taskId, defaultEstimatedHours, insertIndex }) {
+  if (!taskId || !trackId.value) return
+  const body = { taskId, insertIndex }
+  if (defaultEstimatedHours != null && !isNaN(defaultEstimatedHours)) body.estimatedHours = defaultEstimatedHours
+  const r = await api(`/api/tracks/${trackId.value}/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (r.ok) {
+    await loadTrackTasks()
+  } else {
+    const err = await r.json().catch(() => ({}))
+    console.error('Could not add task:', err?.error || r.status)
+  }
 }
 
 onMounted(() => {
