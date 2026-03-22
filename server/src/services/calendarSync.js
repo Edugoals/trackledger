@@ -46,16 +46,68 @@ export async function syncFromGoogle(userId, customerId) {
   const calendarId = customer.selectedCalendarId;
   const calendar = getCalendarClient(user.googleAccessToken, user.googleRefreshToken);
 
+  const now = new Date();
+  const oneYearAgo = new Date(now);
+  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
   const { data } = await calendar.events.list({
     calendarId,
-    timeMin: new Date().toISOString(),
-    maxResults: 100,
+    timeMin: oneYearAgo.toISOString(),
+    maxResults: 250,
+    singleEvents: true,
   });
 
-  const syncedGoogleIds = new Set((data.items || []).map((ge) => ge.id));
+  const deadlineEventIds = new Set();
+  const DEADLINE_PREFIX = 'DEADLINE – ';
+  const TRACKTASK_ID_PATTERN = /TrackTask ID:\s*(\d+)/;
+
+  function getDeadlineTrackTaskId(ge) {
+    const priv = ge?.extendedProperties?.private;
+    if (priv?.trackTaskId) return parseInt(priv.trackTaskId);
+    const desc = ge?.description || '';
+    const m = desc.match(TRACKTASK_ID_PATTERN);
+    return m ? parseInt(m[1]) : null;
+  }
+
+  function isDeadlineEvent(ge) {
+    if (ge?.extendedProperties?.private?.trackledgerType === 'deadline') return true;
+    return (ge?.summary || '').startsWith(DEADLINE_PREFIX);
+  }
+
+  const syncedGoogleIds = new Set(
+    (data.items || []).filter((ge) => !isDeadlineEvent(ge)).map((ge) => ge.id)
+  );
 
   let count = 0;
   for (const ge of data.items || []) {
+    if (isDeadlineEvent(ge)) {
+      deadlineEventIds.add(ge.id);
+      const trackTaskId = getDeadlineTrackTaskId(ge);
+      const startDate = ge.start?.date || ge.start?.dateTime;
+      if (trackTaskId && startDate) {
+        const ttId = trackTaskId;
+        const trackTask = await prisma.trackTask.findFirst({
+          where: {
+            id: ttId,
+            track: { customerId },
+          },
+        });
+        if (trackTask) {
+          const dateStr = typeof startDate === 'string' ? startDate.slice(0, 10) : String(startDate).slice(0, 10);
+          const newDeadlineAt = new Date(dateStr + 'T12:00:00');
+          await prisma.trackTask.update({
+            where: { id: ttId },
+            data: {
+              deadlineAt: newDeadlineAt,
+              deadlineGoogleEventId: ge.id,
+              deadlineSyncStatus: 'SYNCED',
+              deadlineLastSyncedAt: new Date(),
+              deadlineSyncError: null,
+            },
+          });
+        }
+      }
+      continue;
+    }
     const payload = fromGoogleEvent(ge, calendarId);
     const existing = await prisma.calendarEvent.findFirst({
       where: { userId, customerId, calendarId, googleEventId: ge.id },
@@ -72,8 +124,36 @@ export async function syncFromGoogle(userId, customerId) {
     count++;
   }
 
-  let deletedCount = 0;
   const idsToKeep = Array.from(syncedGoogleIds).filter(Boolean);
+  const deadlineIdsToKeep = Array.from(deadlineEventIds).filter(Boolean);
+
+  const deadlineWhere =
+    deadlineIdsToKeep.length > 0
+      ? {
+          track: { customerId },
+          AND: [
+            { deadlineGoogleEventId: { not: null } },
+            { deadlineGoogleEventId: { notIn: deadlineIdsToKeep } },
+          ],
+        }
+      : { track: { customerId }, deadlineGoogleEventId: { not: null } };
+  const trackTasksWithDeletedDeadline = await prisma.trackTask.findMany({
+    where: deadlineWhere,
+  });
+
+  for (const tt of trackTasksWithDeletedDeadline) {
+    await prisma.trackTask.update({
+      where: { id: tt.id },
+      data: {
+        deadlineAt: null,
+        deadlineGoogleEventId: null,
+        deadlineSyncStatus: 'DELETED',
+        deadlineSyncError: null,
+      },
+    });
+  }
+
+  let deletedCount = 0;
   if (idsToKeep.length > 0) {
     const { count } = await prisma.calendarEvent.deleteMany({
       where: {

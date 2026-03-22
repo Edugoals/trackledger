@@ -5,6 +5,28 @@
       <span :class="['diff-badge', diffBadgeClass]">{{ diffBadgeText }}</span>
     </div>
     <p v-if="trackTask.notes" class="notes">{{ trackTask.notes }}</p>
+    <div class="deadline-section">
+      <template v-if="trackTask.deadlineAt">
+        <span :class="['deadline-badge', deadlineStatusClass]" :title="deadlineStatusLabel">📅 {{ formatDeadline(trackTask.deadlineAt) }}</span>
+        <button type="button" class="btn-deadline" @click="showDeadlinePicker = true">Edit</button>
+        <button type="button" class="btn-deadline" @click="$emit('update', { deadlineAt: null })">Remove</button>
+        <span v-if="trackTask.deadlineSyncStatus === 'ERROR'" class="sync-error" :title="trackTask.deadlineSyncError">⚠</span>
+      </template>
+      <template v-else>
+        <button type="button" class="btn-add-deadline" @click="showDeadlinePicker = !showDeadlinePicker">
+          {{ showDeadlinePicker ? 'Cancel' : 'Add deadline' }}
+        </button>
+      </template>
+      <div v-if="showDeadlinePicker" class="deadline-picker">
+        <input
+          type="date"
+          :value="deadlineInputValue"
+          @change="onDeadlineChange"
+          class="deadline-input"
+        />
+        <button type="button" class="btn-small" @click="saveDeadline">Save</button>
+      </div>
+    </div>
     <div v-if="mappedEventCount > 0" class="mapped-events-inline">
       <button type="button" class="btn-expand" @click="expanded = !expanded">
         {{ mappedEventCount }} event{{ mappedEventCount !== 1 ? 's' : '' }} from calendar
@@ -56,8 +78,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { formatHours, formatDate, overrunStatus } from '../utils'
+import { ref, computed, watch } from 'vue'
+import { formatHours, formatDate, formatShortDate, overrunStatus } from '../utils'
 
 const props = defineProps({
   trackTask: { type: Object, required: true },
@@ -67,6 +89,49 @@ const props = defineProps({
 const emit = defineEmits(['update', 'edit-notes', 'remove', 'unassign'])
 
 const expanded = ref(false)
+const showDeadlinePicker = ref(false)
+const deadlineInputValue = ref('')
+
+const deadlineStatusClass = computed(() => {
+  const d = props.trackTask.deadlineAt
+  if (!d) return ''
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const deadline = new Date(d)
+  deadline.setHours(0, 0, 0, 0)
+  if (deadline.getTime() < today.getTime()) return 'overdue'
+  if (deadline.getTime() === today.getTime()) return 'today'
+  return 'future'
+})
+
+const deadlineStatusLabel = computed(() => {
+  if (deadlineStatusClass.value === 'overdue') return 'Overdue'
+  if (deadlineStatusClass.value === 'today') return 'Due today'
+  return 'Upcoming'
+})
+
+function formatDeadline(d) {
+  return formatShortDate(d) || ''
+}
+
+function onDeadlineChange(e) {
+  deadlineInputValue.value = e.target.value
+}
+
+function saveDeadline() {
+  const v = deadlineInputValue.value
+  if (v) emit('update', { deadlineAt: v })
+  showDeadlinePicker.value = false
+}
+
+watch(showDeadlinePicker, (visible) => {
+  if (visible && props.trackTask.deadlineAt) {
+    const d = new Date(props.trackTask.deadlineAt)
+    deadlineInputValue.value = d.toISOString().slice(0, 10)
+  } else if (!visible) {
+    deadlineInputValue.value = ''
+  }
+})
 
 const mappedEventCount = computed(() => props.mappedEvents?.length ?? props.trackTask.mappedEventCount ?? 0)
 
@@ -211,4 +276,14 @@ function onStatusChange(e) {
 .btn-unassign { font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.25rem; background: #fef3c7; border: none; border-radius: 3px; cursor: pointer; }
 .btn-unassign:hover { background: #fde68a; }
 .from-calendar { font-size: 0.75rem; margin-left: 0.25rem; }
+.deadline-section { margin-top: 0.5rem; font-size: 0.85rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+.deadline-badge { padding: 0.2rem 0.5rem; border-radius: 4px; }
+.deadline-badge.future { background: #e5e7eb; color: #374151; }
+.deadline-badge.today { background: #fef3c7; color: #92400e; }
+.deadline-badge.overdue { background: #fee2e2; color: #991b1b; }
+.btn-deadline, .btn-add-deadline { font-size: 0.75rem; padding: 0.15rem 0.4rem; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; }
+.btn-deadline:hover, .btn-add-deadline:hover { background: #e5e7eb; }
+.deadline-picker { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
+.deadline-input { padding: 0.25rem 0.4rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.85rem; }
+.sync-error { color: #dc2626; font-size: 0.9rem; }
 </style>

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { suggestTrackTaskFromTitle } from '../services/eventAssignment.js';
+import { syncDeadlineToGoogle, removeDeadlineFromGoogle } from '../services/deadlineSync.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -189,13 +190,23 @@ router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
 });
 
 router.patch('/track-tasks/:id', ensureTrackTaskAccess, async (req, res) => {
-  const { notes, estimatedHours, actualHours, status, sortOrder } = req.body;
+  const { notes, estimatedHours, actualHours, status, sortOrder, deadlineAt } = req.body;
   const estHours = estimatedHours !== undefined ? parseDecimal(estimatedHours) : undefined;
   const actHours = actualHours !== undefined ? parseDecimal(actualHours) : undefined;
   if (estHours !== undefined && estHours !== null && estHours < 0) return res.status(400).json({ error: 'estimatedHours moet >= 0 zijn' });
   if (actHours !== undefined && (actHours < 0 || isNaN(actHours))) return res.status(400).json({ error: 'actualHours moet >= 0 zijn' });
   if (status !== undefined && !STATUS_VALUES.includes(status)) return res.status(400).json({ error: 'Ongeldige status' });
+
+  const deadlineValue = deadlineAt !== undefined
+    ? (deadlineAt === null || deadlineAt === '' ? null : new Date(deadlineAt))
+    : undefined;
+
   try {
+    const prevTask = await prisma.trackTask.findUnique({
+      where: { id: req.trackTask.id },
+      select: { id: true, deadlineAt: true, deadlineGoogleEventId: true },
+    });
+
     const updated = await prisma.trackTask.update({
       where: { id: req.trackTask.id },
       data: {
@@ -204,9 +215,27 @@ router.patch('/track-tasks/:id', ensureTrackTaskAccess, async (req, res) => {
         ...(actHours !== undefined && { actualHours: actHours }),
         ...(status !== undefined && { status }),
         ...(sortOrder !== undefined && { sortOrder: parseInt(sortOrder) || 0 }),
+        ...(deadlineValue !== undefined && {
+          deadlineAt: deadlineValue,
+          deadlineSyncStatus: deadlineValue ? 'PENDING' : null,
+          deadlineSyncError: null,
+        }),
       },
-      include: { task: true },
+      include: { task: true, track: true },
     });
+
+    if (deadlineValue !== undefined) {
+      if (deadlineValue) {
+        await syncDeadlineToGoogle(updated);
+      } else if (prevTask?.deadlineGoogleEventId) {
+        await removeDeadlineFromGoogle(prevTask);
+      }
+      const fresh = await prisma.trackTask.findUnique({
+        where: { id: req.trackTask.id },
+        include: { task: true },
+      });
+      return res.json(fresh);
+    }
     res.json(updated);
   } catch (e) {
     res.status(500).json({ error: e.message });
