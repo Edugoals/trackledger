@@ -24,7 +24,7 @@
     <div v-else-if="!trackTasks.length" class="empty">
       No tasks yet. Add from the library or create a custom one.
     </div>
-    <div v-else class="list">
+    <div v-else ref="listRef" class="list">
       <TrackTaskCard
         v-for="tt in trackTasks"
         :key="tt.id"
@@ -40,6 +40,8 @@
 </template>
 
 <script setup>
+import { ref, watch, nextTick, onUnmounted } from 'vue'
+import Sortable from 'sortablejs'
 import TrackTaskCard from './TrackTaskCard.vue'
 import TrackTimeline from './TrackTimeline.vue'
 
@@ -51,7 +53,43 @@ const props = defineProps({
   canSync: { type: Boolean, default: false },
 })
 
-defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign', 'sync'])
+const emit = defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign', 'sync', 'reorder'])
+
+const listRef = ref(null)
+let sortable = null
+
+watch(
+  () => [props.loading, props.trackTasks.length],
+  () => {
+    if (props.trackTasks.length === 0) {
+      sortable?.destroy()
+      sortable = null
+      return
+    }
+    if (props.loading) return
+    nextTick(() => {
+      if (listRef.value && !sortable) {
+        sortable = Sortable.create(listRef.value, {
+          handle: '.drag-handle',
+          animation: 150,
+          ghostClass: 'sortable-ghost',
+          chosenClass: 'sortable-chosen',
+          onEnd(evt) {
+            const items = [...props.trackTasks]
+            const [moved] = items.splice(evt.oldIndex, 1)
+            items.splice(evt.newIndex, 0, moved)
+            emit('reorder', items)
+          },
+        })
+      }
+    })
+  },
+  { immediate: true }
+)
+
+onUnmounted(() => {
+  sortable?.destroy()
+})
 </script>
 
 <style scoped>
@@ -94,4 +132,6 @@ defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign', 'sync'])
 .btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
 .loading, .empty { font-size: 0.9rem; color: #6b7280; padding: 1rem 0; }
 .list { display: flex; flex-direction: column; }
+.list :deep(.sortable-ghost) { opacity: 0.5; background: #f3f4f6; }
+.list :deep(.sortable-chosen) { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 </style>

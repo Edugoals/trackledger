@@ -4,8 +4,6 @@
     <ul v-if="tasks.length" class="task-list">
       <li v-for="t in tasks" :key="t.id" class="task-item">
         <span class="task-name">{{ t.name }}</span>
-        <span v-if="t.defaultEstimatedHours != null" class="task-hours">{{ formatHours(t.defaultEstimatedHours) }}h</span>
-        <button type="button" class="btn-add" @click="$emit('add', t)" title="Add to track">+</button>
       </li>
     </ul>
     <p v-else-if="!loading" class="empty">No tasks yet. Create one in <router-link to="/tasks">Task Library</router-link>.</p>
@@ -15,8 +13,6 @@
 </template>
 
 <script setup>
-import { formatHours } from '../utils'
-
 defineProps({
   tasks: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
@@ -51,23 +47,6 @@ defineEmits(['add', 'create-custom'])
 }
 .task-item:last-child { border-bottom: none; }
 .task-name { flex: 1; }
-.task-hours { font-size: 0.8rem; color: #6b7280; }
-.btn-add {
-  width: 24px;
-  height: 24px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: white;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  color: #374151;
-}
-.btn-add:hover {
-  background: #213547;
-  color: white;
-  border-color: #213547;
-}
 .empty { font-size: 0.85rem; color: #6b7280; margin: 0.5rem 0 0; }
 .btn-custom {
   margin-top: 0.75rem;

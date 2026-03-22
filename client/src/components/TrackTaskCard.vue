@@ -1,6 +1,7 @@
 <template>
   <article class="track-task-card" :class="statusClass">
     <div class="card-header">
+      <span class="drag-handle" title="Drag to reorder">⋮⋮</span>
       <span class="task-title">{{ displayName }}</span>
       <span :class="['diff-badge', diffBadgeClass]">{{ diffBadgeText }}</span>
     </div>
@@ -207,6 +208,14 @@ function onStatusChange(e) {
   align-items: flex-start;
   gap: 0.5rem;
 }
+.drag-handle {
+  flex-shrink: 0;
+  cursor: grab;
+  color: #9ca3af;
+  font-size: 0.9rem;
+  user-select: none;
+}
+.drag-handle:active { cursor: grabbing; }
 .task-title { font-weight: 600; font-size: 0.95rem; }
 .diff-badge {
   font-size: 0.75rem;

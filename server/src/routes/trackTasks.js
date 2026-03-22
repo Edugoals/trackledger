@@ -162,6 +162,37 @@ router.get('/tracks/:trackId/events', ensureTrackAccess, async (req, res) => {
   }
 });
 
+router.patch('/tracks/:trackId/tasks/reorder', ensureTrackAccess, async (req, res) => {
+  const { trackTaskIds } = req.body;
+  if (!Array.isArray(trackTaskIds) || trackTaskIds.length === 0) {
+    return res.status(400).json({ error: 'trackTaskIds array verplicht' });
+  }
+  const ids = trackTaskIds.map((id) => parseInt(id)).filter((n) => !isNaN(n));
+  if (ids.length !== trackTaskIds.length) {
+    return res.status(400).json({ error: 'Ongeldige trackTaskIds' });
+  }
+  try {
+    const existing = await prisma.trackTask.findMany({
+      where: { id: { in: ids }, trackId: req.track.id },
+      select: { id: true },
+    });
+    const existingIds = new Set(existing.map((tt) => tt.id));
+    if (existingIds.size !== ids.length) {
+      return res.status(400).json({ error: 'Niet alle tasks behoren tot dit track' });
+    }
+    const updates = ids.map((id, index) =>
+      prisma.trackTask.update({
+        where: { id },
+        data: { sortOrder: index },
+      })
+    );
+    await prisma.$transaction(updates);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
   const { taskId, notes, estimatedHours } = req.body;
   if (!taskId) return res.status(400).json({ error: 'taskId verplicht' });
@@ -173,12 +204,19 @@ router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
   if (estHours !== null && estHours < 0) return res.status(400).json({ error: 'estimatedHours moet >= 0 zijn' });
   const hours = estHours ?? (task.defaultEstimatedHours ? parseFloat(task.defaultEstimatedHours) : null);
   try {
+    const maxOrder = await prisma.trackTask
+      .aggregate({
+        where: { trackId: req.track.id },
+        _max: { sortOrder: true },
+      })
+      .then((r) => (r._max.sortOrder ?? -1) + 1);
     const trackTask = await prisma.trackTask.create({
       data: {
         trackId: req.track.id,
         taskId: task.id,
         notes: notes?.trim() || null,
         estimatedHours: hours,
+        sortOrder: maxOrder,
       },
       include: { task: true },
     });

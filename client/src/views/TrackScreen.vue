@@ -28,6 +28,7 @@
           @edit-notes="openNotesEdit"
           @remove="removeTrackTask"
           @unassign="(ev) => assignEvent({ eventId: ev.id, assignedTrackTaskId: null })"
+          @reorder="onTrackTasksReorder"
         />
         <TrackInsightsPanel :aggregation="aggregation" />
       </div>
@@ -298,6 +299,18 @@ async function removeTrackTask(tt) {
   if (!confirm('Remove this task from the track?')) return
   const r = await api(`/api/track-tasks/${tt.id}`, { method: 'DELETE' })
   if (r.ok) await loadTrackTasks()
+}
+
+async function onTrackTasksReorder(newList) {
+  const ids = newList.map(tt => tt.id)
+  if (!ids.length || !trackId.value) return
+  trackTasks.value = newList
+  const r = await api(`/api/tracks/${trackId.value}/tasks/reorder`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ trackTaskIds: ids }),
+  })
+  if (!r.ok) await loadTrackTasks()
 }
 
 onMounted(() => {
