@@ -160,7 +160,7 @@ router.patch('/:id/assignment', async (req, res) => {
   let trackTaskId = null;
   if (assignedTrackTaskId != null) {
     const tt = await prisma.trackTask.findFirst({
-      where: { id: parseInt(assignedTrackTaskId) },
+      where: { id: parseInt(assignedTrackTaskId), userId: req.session.userId },
       include: { track: true },
     });
     if (!tt || tt.track.customerId !== event.customerId) {

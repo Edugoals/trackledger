@@ -19,6 +19,9 @@ model User {
   events               CalendarEvent[]
   customers            Customer[]
   tasks                Task[]
+  jobs                 Job[]
+  tracks               Track[]
+  trackTasks           TrackTask[]
 }
 
 model Customer {
@@ -42,10 +45,13 @@ model Job {
   endDate    DateTime
   customerId Int
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tracks     Track[]
   createdAt  DateTime @default(now())
 
   @@unique([customerId, name])
+  @@index([userId])
 }
 
 model Track {
@@ -55,10 +61,13 @@ model Track {
   job        Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
   customerId Int
   customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  userId     Int
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   trackTasks TrackTask[]
   createdAt  DateTime    @default(now())
 
   @@unique([customerId, name])
+  @@index([userId])
 }
 
 enum TrackTaskStatus {
@@ -89,6 +98,8 @@ model TrackTask {
   track                Track           @relation(fields: [trackId], references: [id], onDelete: Cascade)
   taskId               Int
   task                 Task            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId               Int
+  user                 User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   titleOverride        String?
   notes                String?         @db.Text
   estimatedHours       Decimal?        @db.Decimal(10, 2)
@@ -105,6 +116,7 @@ model TrackTask {
   updatedAt            DateTime        @updatedAt
 
   @@unique([trackId, taskId])
+  @@index([userId])
 }
 
 model CalendarEvent {

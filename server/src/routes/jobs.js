@@ -14,10 +14,10 @@ router.use(requireAuth);
 async function ensureJobAccess(req, res, next) {
   const id = parseInt(req.params.id);
   const job = await prisma.job.findFirst({
-    where: { id },
+    where: { id, userId: req.session.userId },
     include: { customer: true },
   });
-  if (!job || job.customer.userId !== req.session.userId) return res.status(404).json({ error: 'Opdracht niet gevonden' });
+  if (!job) return res.status(404).json({ error: 'Opdracht niet gevonden' });
   req.job = job;
   next();
 }
@@ -31,30 +31,30 @@ router.get('/', async (req, res) => {
       });
       if (!customer) return res.status(404).json({ error: 'Klant niet gevonden' });
       const jobs = await prisma.job.findMany({
-        where: { customerId: customer.id },
+        where: { customerId: customer.id, userId: req.session.userId },
         include: { _count: { select: { tracks: true } }, customer: { select: { name: true } } },
         orderBy: { startDate: 'desc' },
       });
-      const withStats = await addJobStats(jobs);
+      const withStats = await addJobStats(jobs, req.session.userId);
       return res.json(withStats);
     }
     const jobs = await prisma.job.findMany({
-      where: { customer: { userId: req.session.userId } },
+      where: { userId: req.session.userId },
       include: { _count: { select: { tracks: true } }, customer: { select: { name: true } } },
       orderBy: { startDate: 'desc' },
     });
-    const withStats = await addJobStats(jobs);
+    const withStats = await addJobStats(jobs, req.session.userId);
     res.json(withStats);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-async function addJobStats(jobs) {
+async function addJobStats(jobs, currentUserId) {
   const result = [];
   for (const job of jobs) {
     const trackTasks = await prisma.trackTask.findMany({
-      where: { track: { jobId: job.id } },
+      where: { track: { jobId: job.id }, userId: currentUserId },
       select: { estimatedHours: true, actualHours: true },
     });
     const totalEstimated = trackTasks.reduce((s, tt) => s + (parseFloat(tt.estimatedHours) || 0), 0);
@@ -114,6 +114,7 @@ router.post('/', async (req, res) => {
     const job = await prisma.job.create({
       data: {
         customerId: customer.id,
+        userId: customer.userId,
         name: name.trim(),
         startDate: new Date(startDate),
         endDate: new Date(endDate),
@@ -130,7 +131,7 @@ router.put('/:id', ensureJobAccess, async (req, res) => {
   const { name, startDate, endDate } = req.body;
   try {
     const updated = await prisma.job.update({
-      where: { id: req.job.id },
+      where: { id: req.job.id, userId: req.session.userId },
       data: {
         ...(name != null && { name: name.trim() }),
         ...(startDate != null && { startDate: new Date(startDate) }),
@@ -146,7 +147,7 @@ router.put('/:id', ensureJobAccess, async (req, res) => {
 
 router.delete('/:id', ensureJobAccess, async (req, res) => {
   try {
-    await prisma.job.delete({ where: { id: req.job.id } });
+    await prisma.job.delete({ where: { id: req.job.id, userId: req.session.userId } });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

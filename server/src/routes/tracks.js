@@ -14,10 +14,10 @@ router.use(requireAuth);
 async function ensureTrackAccess(req, res, next) {
   const id = parseInt(req.params.id);
   const track = await prisma.track.findFirst({
-    where: { id },
+    where: { id, userId: req.session.userId },
     include: { job: { include: { customer: true } } },
   });
-  if (!track || track.job.customer.userId !== req.session.userId) return res.status(404).json({ error: 'Track niet gevonden' });
+  if (!track) return res.status(404).json({ error: 'Track niet gevonden' });
   req.track = track;
   next();
 }
@@ -26,10 +26,10 @@ router.get('/', async (req, res) => {
   const { jobId } = req.query;
   if (!jobId) return res.status(400).json({ error: 'jobId verplicht' });
   const job = await prisma.job.findFirst({
-    where: { id: parseInt(jobId) },
+    where: { id: parseInt(jobId), userId: req.session.userId },
     include: { customer: true },
   });
-  if (!job || job.customer.userId !== req.session.userId) return res.status(404).json({ error: 'Opdracht niet gevonden' });
+  if (!job) return res.status(404).json({ error: 'Opdracht niet gevonden' });
   try {
     const tracks = await prisma.track.findMany({
       where: { jobId: job.id },
@@ -45,15 +45,16 @@ router.post('/', async (req, res) => {
   const { jobId, name } = req.body;
   if (!jobId || !name?.trim()) return res.status(400).json({ error: 'jobId en name verplicht' });
   const job = await prisma.job.findFirst({
-    where: { id: parseInt(jobId) },
+    where: { id: parseInt(jobId), userId: req.session.userId },
     include: { customer: true },
   });
-  if (!job || job.customer.userId !== req.session.userId) return res.status(404).json({ error: 'Opdracht niet gevonden' });
+  if (!job) return res.status(404).json({ error: 'Opdracht niet gevonden' });
   try {
     const track = await prisma.track.create({
       data: {
         jobId: job.id,
         customerId: job.customerId,
+        userId: job.userId,
         name: name.trim(),
       },
     });
@@ -69,7 +70,7 @@ router.put('/:id', ensureTrackAccess, async (req, res) => {
   if (name == null) return res.status(400).json({ error: 'name verplicht' });
   try {
     const updated = await prisma.track.update({
-      where: { id: req.track.id },
+      where: { id: req.track.id, userId: req.session.userId },
       data: { name: name.trim() },
     });
     res.json(updated);
@@ -81,7 +82,7 @@ router.put('/:id', ensureTrackAccess, async (req, res) => {
 
 router.delete('/:id', ensureTrackAccess, async (req, res) => {
   try {
-    await prisma.track.delete({ where: { id: req.track.id } });
+    await prisma.track.delete({ where: { id: req.track.id, userId: req.session.userId } });
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });

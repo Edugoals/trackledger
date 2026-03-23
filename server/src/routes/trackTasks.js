@@ -18,10 +18,10 @@ router.use(requireAuth);
 async function ensureTrackAccess(req, res, next) {
   const trackId = parseInt(req.params.trackId);
   const track = await prisma.track.findFirst({
-    where: { id: trackId },
+    where: { id: trackId, userId: req.session.userId },
     include: { job: { include: { customer: true } } },
   });
-  if (!track || track.job.customer.userId !== req.session.userId) return res.status(404).json({ error: 'Track niet gevonden' });
+  if (!track) return res.status(404).json({ error: 'Track niet gevonden' });
   req.track = track;
   next();
 }
@@ -29,10 +29,10 @@ async function ensureTrackAccess(req, res, next) {
 async function ensureTrackTaskAccess(req, res, next) {
   const id = parseInt(req.params.id);
   const tt = await prisma.trackTask.findFirst({
-    where: { id },
+    where: { id, userId: req.session.userId },
     include: { track: { include: { job: { include: { customer: true } } } } },
   });
-  if (!tt || tt.track.job.customer.userId !== req.session.userId) return res.status(404).json({ error: 'TrackTask niet gevonden' });
+  if (!tt) return res.status(404).json({ error: 'TrackTask niet gevonden' });
   req.trackTask = tt;
   next();
 }
@@ -74,7 +74,7 @@ router.get('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
     const calendarId = customer?.selectedCalendarId;
 
     const trackTasks = await prisma.trackTask.findMany({
-      where: { trackId: track.id },
+      where: { trackId: track.id, userId: req.session.userId },
       include: { task: true },
       orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
     });
@@ -132,7 +132,7 @@ router.get('/tracks/:trackId/events', ensureTrackAccess, async (req, res) => {
     });
 
     const trackTasks = await prisma.trackTask.findMany({
-      where: { trackId: track.id },
+      where: { trackId: track.id, userId: req.session.userId },
       include: { task: true },
     });
 
@@ -173,7 +173,7 @@ router.patch('/tracks/:trackId/tasks/reorder', ensureTrackAccess, async (req, re
   }
   try {
     const existing = await prisma.trackTask.findMany({
-      where: { id: { in: ids }, trackId: req.track.id },
+      where: { id: { in: ids }, trackId: req.track.id, userId: req.session.userId },
       select: { id: true },
     });
     const existingIds = new Set(existing.map((tt) => tt.id));
@@ -182,7 +182,7 @@ router.patch('/tracks/:trackId/tasks/reorder', ensureTrackAccess, async (req, re
     }
     const updates = ids.map((id, index) =>
       prisma.trackTask.update({
-        where: { id },
+        where: { id, trackId: req.track.id, userId: req.session.userId },
         data: { sortOrder: index },
       })
     );
@@ -209,14 +209,14 @@ router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
       const idx = parseInt(insertIndex);
       if (isNaN(idx) || idx < 0) return res.status(400).json({ error: 'insertIndex moet >= 0 zijn' });
       await prisma.trackTask.updateMany({
-        where: { trackId: req.track.id, sortOrder: { gte: idx } },
+        where: { trackId: req.track.id, userId: req.session.userId, sortOrder: { gte: idx } },
         data: { sortOrder: { increment: 1 } },
       });
       sortOrder = idx;
     } else {
       const maxOrder = await prisma.trackTask
         .aggregate({
-          where: { trackId: req.track.id },
+          where: { trackId: req.track.id, userId: req.session.userId },
           _max: { sortOrder: true },
         })
         .then((r) => (r._max.sortOrder ?? -1) + 1);
@@ -226,6 +226,7 @@ router.post('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
       data: {
         trackId: req.track.id,
         taskId: task.id,
+        userId: req.track.userId,
         notes: notes?.trim() || null,
         estimatedHours: hours,
         sortOrder,

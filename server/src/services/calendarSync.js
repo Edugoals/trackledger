@@ -88,6 +88,7 @@ export async function syncFromGoogle(userId, customerId) {
         const trackTask = await prisma.trackTask.findFirst({
           where: {
             id: ttId,
+            userId,
             track: { customerId },
           },
         });
@@ -130,13 +131,14 @@ export async function syncFromGoogle(userId, customerId) {
   const deadlineWhere =
     deadlineIdsToKeep.length > 0
       ? {
+          userId,
           track: { customerId },
           AND: [
             { deadlineGoogleEventId: { not: null } },
             { deadlineGoogleEventId: { notIn: deadlineIdsToKeep } },
           ],
         }
-      : { track: { customerId }, deadlineGoogleEventId: { not: null } };
+      : { userId, track: { customerId }, deadlineGoogleEventId: { not: null } };
   const trackTasksWithDeletedDeadline = await prisma.trackTask.findMany({
     where: deadlineWhere,
   });
