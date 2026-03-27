@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
+import { loadAuthUser } from './auth'
 
-const app = createApp(App)
-app.use(router)
-app.mount('#app')
+await loadAuthUser()
+createApp(App).use(router).mount('#app')

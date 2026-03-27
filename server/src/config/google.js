@@ -8,11 +8,12 @@ export const oauth2Client = new google.auth.OAuth2(
 
 const SCOPES = ['https://www.googleapis.com/auth/calendar', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/userinfo.profile'];
 
-export function getAuthUrl() {
+export function getAuthUrl(state) {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
     prompt: 'consent',
+    ...(state != null && state !== '' ? { state } : {}),
   });
 }
 

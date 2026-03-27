@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import session from 'express-session';
-import { PrismaClient } from '@prisma/client';
 import authRoutes from './routes/auth.js';
 import eventsRoutes from './routes/events.js';
 import calendarsRoutes from './routes/calendars.js';
@@ -11,20 +10,30 @@ import tracksRoutes from './routes/tracks.js';
 import tasksRoutes from './routes/tasks.js';
 import trackTasksRoutes from './routes/trackTasks.js';
 
-const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+const isProd = process.env.NODE_ENV === 'production';
+
+if (isProd) {
+  app.set('trust proxy', 1);
+}
 
 app.use(cors({ origin: clientUrl, credentials: true }));
 app.use(express.json());
 app.use(
   session({
+    name: 'trackledger.sid',
     secret: process.env.SESSION_SECRET || 'trackledger-dev-secret',
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 7 * 24 * 60 * 60 * 1000, sameSite: 'lax', httpOnly: true },
+    cookie: {
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'lax',
+      httpOnly: true,
+      secure: isProd,
+    },
   })
 );
 

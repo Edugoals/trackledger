@@ -2,26 +2,37 @@
   <div class="app">
     <h1>TrackLedger</h1>
 
-    <template v-if="loading">Laden...</template>
-
-    <template v-else-if="!user">
-      <p>Log in met Google om je agenda te synchroniseren.</p>
-      <a :href="loginUrl" class="btn">Inloggen met Google</a>
+    <template v-if="!authUser">
+      <router-view />
     </template>
 
     <template v-else>
       <header class="header">
-        <span>Hallo, {{ user.name || user.email }}</span>
+        <span>Hallo, {{ authUser.name || authUser.email }}</span>
         <nav class="nav">
           <router-link to="/projects" class="nav-link">Projects</router-link>
           <router-link to="/customers" class="nav-link">Customers</router-link>
           <router-link to="/tasks" class="nav-link">Tasks</router-link>
         </nav>
         <div class="header-actions">
+          <span v-if="authUser.googleConnected" class="badge badge-ok" title="Google Calendar gekoppeld">
+            Google gekoppeld
+          </span>
+          <span v-else class="badge badge-muted" title="Nog geen Google Calendar">
+            Geen Google-agenda
+          </span>
+          <a
+            v-if="!authUser.googleConnected"
+            href="/api/auth/google/connect"
+            class="btn btn-small"
+          >
+            Google Calendar koppelen
+          </a>
           <select
             v-model="headerContext.selectedCustomerId"
             class="sync-select"
             title="Kies klant voor agenda-sync"
+            :disabled="!authUser.googleConnected"
           >
             <option :value="null">— Klant voor sync —</option>
             <option v-for="c in customers" :key="c.id" :value="c.id">
@@ -30,7 +41,7 @@
           </select>
           <button
             @click="sync"
-            :disabled="syncing || !headerContext.selectedCustomerId"
+            :disabled="syncing || !headerContext.selectedCustomerId || !authUser.googleConnected"
             class="btn btn-small"
             title="Sync agenda van geselecteerde klant"
           >
@@ -40,6 +51,8 @@
         </div>
       </header>
 
+      <p v-if="googleBanner" class="banner">{{ googleBanner }}</p>
+
       <main class="main">
         <router-view />
       </main>
@@ -48,25 +61,29 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from './api'
+import { authUser, loadAuthUser, clearAuthUser } from './auth'
 import { headerContext } from './stores/headerContext'
 
-const loading = ref(true)
-const user = ref(null)
+const route = useRoute()
+const router = useRouter()
 const syncing = ref(false)
 const customers = ref([])
 
-const loginUrl = '/api/auth/google'
+const googleBanner = computed(() => {
+  const g = route.query.google
+  if (g === 'connected') return 'Google Calendar is gekoppeld.'
+  if (g === 'error') return 'Google-koppeling mislukt. Probeer opnieuw.'
+  if (g === 'conflict') return 'Dit Google-account is al aan een ander profiel gekoppeld.'
+  if (g === 'need_login') return 'Log eerst in om Google te koppelen.'
+  return ''
+})
 
 async function loadCustomers() {
   const r = await api('/api/customers')
   if (r.ok) customers.value = await r.json()
-}
-
-async function loadUser() {
-  const r = await api('/api/auth/me')
-  if (r.ok) user.value = await r.json()
 }
 
 async function sync() {
@@ -88,14 +105,17 @@ async function sync() {
 
 async function logout() {
   await api('/api/auth/logout')
-  user.value = null
+  clearAuthUser()
   headerContext.selectedCustomerId = null
+  router.push('/login')
 }
 
 onMounted(async () => {
-  await loadUser()
-  if (user.value) await loadCustomers()
-  loading.value = false
+  if (route.query.google) {
+    await loadAuthUser()
+    router.replace({ path: route.path, query: {} })
+  }
+  if (authUser.value) await loadCustomers()
 })
 </script>
 
@@ -122,11 +142,15 @@ h1 { color: #213547; margin: 0 0 1.5rem; }
 }
 .nav-link:hover { background: #f3f4f6; }
 .nav-link.router-link-active { background: #213547; color: white; }
-.header-actions { display: flex; align-items: center; gap: 0.5rem; }
+.header-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .sync-select { padding: 0.3rem 0.5rem; border-radius: 6px; border: 1px solid #d1d5db; font-size: 0.9rem; }
 .btn { padding: 0.5rem 1rem; background: #213547; color: white; border: none; border-radius: 6px; cursor: pointer; text-decoration: none; display: inline-block; }
 .btn:hover { background: #3a4f63; }
 .btn-small { font-size: 0.9rem; padding: 0.3rem 0.6rem; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .main { min-height: 200px; }
+.badge { font-size: 0.8rem; padding: 0.2rem 0.4rem; border-radius: 4px; }
+.badge-ok { background: #d1fae5; color: #065f46; }
+.badge-muted { background: #f3f4f6; color: #6b7280; }
+.banner { margin: 0 0 1rem; padding: 0.5rem 0.75rem; background: #eff6ff; border-radius: 6px; color: #1e40af; font-size: 0.95rem; }
 </style>

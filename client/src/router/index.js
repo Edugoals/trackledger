@@ -1,7 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { authUser } from '../auth'
 
 const routes = [
-  { path: '/', redirect: '/projects' },
+  { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { title: 'Inloggen', public: true } },
+  { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { title: 'Registreren', public: true } },
+  { path: '/', redirect: (to) => ({ path: '/projects', query: to.query }) },
   { path: '/projects', name: 'projects', component: () => import('../views/ProjectsOverview.vue'), meta: { title: 'Projects' } },
   { path: '/projects/:projectId', name: 'project', component: () => import('../views/ProjectDetail.vue'), meta: { title: 'Project' } },
   { path: '/projects/:projectId/tracks/:trackId', name: 'track', component: () => import('../views/TrackScreen.vue'), meta: { title: 'Track' } },
@@ -12,6 +15,19 @@ const routes = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
+})
+
+router.beforeEach((to) => {
+  if (to.meta.public) {
+    if (authUser.value && (to.name === 'login' || to.name === 'register')) {
+      return { path: '/projects' }
+    }
+    return true
+  }
+  if (!authUser.value) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  return true
 })
 
 router.afterEach((to) => {

@@ -11,11 +11,14 @@ model User {
   id                   Int        @id @default(autoincrement())
   email                String     @unique
   name                 String?
+  passwordHash         String?    @db.Text
   googleId             String?    @unique
   googleAccessToken    String?    @db.Text
   googleRefreshToken   String?    @db.Text
+  googleConnectedAt    DateTime?
   selectedCalendarId   String?
   createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
   events               CalendarEvent[]
   customers            Customer[]
   tasks                Task[]

@@ -1,14 +1,10 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { getCalendarClient } from '../config/google.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 
 const router = Router();
 const prisma = new PrismaClient();
-
-function requireAuth(req, res, next) {
-  if (!req.session?.userId) return res.status(401).json({ error: 'Login vereist' });
-  next();
-}
 
 router.use(requireAuth);
 
