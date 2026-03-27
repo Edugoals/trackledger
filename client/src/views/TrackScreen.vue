@@ -212,7 +212,7 @@ async function assignEvent({ eventId, assignedTrackTaskId }) {
 async function loadTasks() {
   tasksLoading.value = true
   try {
-    const r = await api('/api/tasks')
+    const r = await api('/api/tasks?activeOnly=1')
     if (r.ok) tasks.value = await r.json()
   } catch (e) {
     console.error(e)
