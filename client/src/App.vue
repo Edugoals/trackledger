@@ -23,7 +23,7 @@
           </span>
           <a
             v-if="!authUser.googleConnected"
-            href="/api/auth/google/connect"
+            href="/api/auth/google/connect/start"
             class="btn btn-small"
           >
             Google Calendar koppelen
@@ -74,10 +74,16 @@ const customers = ref([])
 
 const googleBanner = computed(() => {
   const g = route.query.google
+  const reason = route.query.reason
   if (g === 'connected') return 'Google Calendar is gekoppeld.'
-  if (g === 'error') return 'Google-koppeling mislukt. Probeer opnieuw.'
-  if (g === 'conflict') return 'Dit Google-account is al aan een ander profiel gekoppeld.'
   if (g === 'need_login') return 'Log eerst in om Google te koppelen.'
+  if (g === 'conflict') return 'Dit Google-account is al aan een ander profiel gekoppeld.'
+  if (g === 'error') {
+    if (reason === 'oauth_not_configured' || reason === 'oauth_config') {
+      return 'Google OAuth is niet geconfigureerd op de server (GOOGLE_CLIENT_ID / SECRET / REDIRECT_URI).'
+    }
+    return 'Google-koppeling mislukt. Controleer of de OAuth-client in Google Cloud klopt en of de redirect-URI exact overeenkomt.'
+  }
   return ''
 })
 

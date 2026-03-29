@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { oauth2Client, getAuthUrl } from '../config/google.js';
+import { getAuthUrl, getOAuth2Client, isGoogleOAuthConfigured } from '../config/google.js';
 import { PrismaClient } from '@prisma/client';
 import { google } from 'googleapis';
 import { requireAuth } from '../middleware/requireAuth.js';
@@ -91,11 +91,6 @@ router.get('/logout', (req, res) => {
   });
 });
 
-/** @deprecated Gebruik inloggen via e-mail/wachtwoord; Google koppelen via /google/connect */
-router.get('/google', (req, res) => {
-  res.redirect(`${clientUrl}/login`);
-});
-
 router.get('/me', async (req, res) => {
   if (!req.session?.userId) return res.status(401).json({ error: 'Niet ingelogd' });
   const user = await prisma.user.findUnique({
@@ -105,11 +100,29 @@ router.get('/me', async (req, res) => {
   res.json(publicUserFields(user));
 });
 
-router.get('/google/connect', requireAuth, (req, res) => {
+function startGoogleConnect(req, res) {
+  if (!isGoogleOAuthConfigured()) {
+    console.warn('Google OAuth: missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REDIRECT_URI');
+    return res.redirect(`${clientUrl}?google=error&reason=oauth_not_configured`);
+  }
   const state = crypto.randomBytes(24).toString('hex');
   req.session.oauthState = state;
-  res.redirect(getAuthUrl(state));
-});
+  req.session.save((err) => {
+    if (err) {
+      console.error('Session save before Google OAuth:', err);
+      return res.status(500).json({ error: 'Sessie kon niet worden opgeslagen' });
+    }
+    try {
+      res.redirect(getAuthUrl(state));
+    } catch (e) {
+      console.error('Google OAuth authorize URL:', e);
+      res.redirect(`${clientUrl}?google=error&reason=oauth_config`);
+    }
+  });
+}
+
+router.get('/google/connect/start', requireAuth, startGoogleConnect);
+router.get('/google/connect', requireAuth, startGoogleConnect);
 
 router.get('/google/callback', async (req, res) => {
   const { code, state } = req.query;
@@ -123,7 +136,12 @@ router.get('/google/callback', async (req, res) => {
   }
   delete req.session.oauthState;
 
+  if (!isGoogleOAuthConfigured()) {
+    return res.redirect(`${clientUrl}?google=error&reason=oauth_not_configured`);
+  }
+
   try {
+    const oauth2Client = getOAuth2Client();
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
 

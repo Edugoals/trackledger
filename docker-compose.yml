@@ -29,7 +29,9 @@ services:
       DATABASE_URL: mysql://${DB_USER:-trackledger}:${DB_PASSWORD:-trackledger}@database:3306/${DB_NAME:-trackledger}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      # Zelfde origin als de browser (meestal Vite :5173), anders ontbreekt de sessiecookie op de callback.
+      # Must match an "Authorized redirect URI" in Google Cloud exactly. Same host as where the browser loads the app (session cookie).
+      # Dev (Vite :5173): http://localhost:5173/api/auth/google/callback
+      # Prod: https://trackledger.nl/api/auth/google/callback
       GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:5173/api/auth/google/callback}
       CLIENT_URL: ${CLIENT_URL:-http://localhost:5173}
       SESSION_SECRET: ${SESSION_SECRET:-trackledger-dev}

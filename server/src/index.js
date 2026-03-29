@@ -9,6 +9,7 @@ import jobsRoutes from './routes/jobs.js';
 import tracksRoutes from './routes/tracks.js';
 import tasksRoutes from './routes/tasks.js';
 import trackTasksRoutes from './routes/trackTasks.js';
+import { isGoogleOAuthConfigured } from './config/google.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -52,4 +53,9 @@ app.use('/api/tasks', tasksRoutes);
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  if (!isProd && !isGoogleOAuthConfigured()) {
+    console.warn(
+      '[dev] Google Calendar OAuth not configured: set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI (must match Google Cloud redirect URIs exactly).'
+    );
+  }
 });
