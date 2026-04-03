@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import crypto from 'crypto';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/requireAuth.js';
 
@@ -80,6 +81,33 @@ router.delete('/:id', ensureTrackAccess, async (req, res) => {
   try {
     await prisma.track.delete({ where: { id: req.track.id, userId: req.session.userId } });
     res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/** Create or rotate read-only customer share link for this track. */
+router.post('/:id/share', ensureTrackAccess, async (req, res) => {
+  const clientBase = (process.env.CLIENT_URL || 'http://localhost:5173').replace(/\/$/, '');
+  const token = crypto.randomBytes(24).toString('base64url');
+
+  try {
+    await prisma.trackShare.upsert({
+      where: { trackId: req.track.id },
+      create: {
+        trackId: req.track.id,
+        token,
+        createdByUserId: req.session.userId,
+      },
+      update: {
+        token,
+        isActive: true,
+        expiresAt: null,
+      },
+    });
+
+    const shareUrl = `${clientBase}/share/track/${encodeURIComponent(token)}`;
+    res.status(201).json({ token, shareUrl });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

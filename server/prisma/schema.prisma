@@ -25,6 +25,7 @@ model User {
   jobs                 Job[]
   tracks               Track[]
   trackTasks           TrackTask[]
+  trackSharesCreated   TrackShare[]
 }
 
 model Customer {
@@ -67,10 +68,27 @@ model Track {
   userId     Int
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   trackTasks TrackTask[]
+  share      TrackShare?
   createdAt  DateTime    @default(now())
 
   @@unique([customerId, name])
   @@index([userId])
+}
+
+/// Read-only share link for customer view of a track (no customer login).
+model TrackShare {
+  id              Int       @id @default(autoincrement())
+  trackId         Int       @unique
+  track           Track     @relation(fields: [trackId], references: [id], onDelete: Cascade)
+  token           String    @unique @db.VarChar(64)
+  isActive        Boolean   @default(true)
+  expiresAt       DateTime?
+  createdByUserId Int
+  createdBy       User      @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([token])
 }
 
 enum TrackTaskStatus {

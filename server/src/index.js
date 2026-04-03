@@ -9,6 +9,7 @@ import jobsRoutes from './routes/jobs.js';
 import tracksRoutes from './routes/tracks.js';
 import tasksRoutes from './routes/tasks.js';
 import trackTasksRoutes from './routes/trackTasks.js';
+import publicTrackShareRoutes from './routes/publicTrackShare.js';
 import { isGoogleOAuthConfigured } from './config/google.js';
 
 const app = express();
@@ -41,6 +42,8 @@ app.use(
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.use('/api/public', publicTrackShareRoutes);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/calendars', calendarsRoutes);

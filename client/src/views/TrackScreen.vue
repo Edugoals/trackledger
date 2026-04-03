@@ -5,8 +5,18 @@
     <template v-else-if="track">
       <header class="header">
         <router-link :to="{ name: 'project', params: { projectId: projectId } }" class="back">← Project</router-link>
-        <h2>{{ track.name }}</h2>
-        <p class="project-name">{{ projectName }}</p>
+        <div class="header-main">
+          <div>
+            <h2>{{ track.name }}</h2>
+            <p class="project-name">{{ projectName }}</p>
+          </div>
+          <div class="share-actions">
+            <button type="button" class="btn-share" :disabled="shareBusy" @click="createCustomerShareLink">
+              {{ shareBusy ? 'Bezig…' : 'Link voor klant' }}
+            </button>
+            <p v-if="shareMessage" class="share-msg">{{ shareMessage }}</p>
+          </div>
+        </div>
       </header>
       <div class="columns">
         <TaskLibrary
@@ -120,6 +130,8 @@ const notesForm = ref({ trackTask: null, notes: '' })
 const addTaskForm = ref({ taskId: '', estimatedHours: '' })
 const customTaskName = ref('')
 const customTaskHours = ref('')
+const shareBusy = ref(false)
+const shareMessage = ref('')
 
 const availableTasks = computed(() => {
   const used = new Set(trackTasks.value.map(tt => tt.taskId))
@@ -127,6 +139,31 @@ const availableTasks = computed(() => {
 })
 
 const usedTaskIds = computed(() => trackTasks.value.map(tt => tt.taskId))
+
+async function createCustomerShareLink() {
+  if (!trackId.value) return
+  shareMessage.value = ''
+  shareBusy.value = true
+  try {
+    const r = await api(`/api/tracks/${trackId.value}/share`, { method: 'POST' })
+    const data = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      shareMessage.value = data.error || 'Kon geen link maken.'
+      return
+    }
+    const url = data.shareUrl
+    try {
+      await navigator.clipboard.writeText(url)
+      shareMessage.value = 'Link gekopieerd naar klembord. Stuur deze naar je klant.'
+    } catch {
+      shareMessage.value = url
+    }
+  } catch (e) {
+    shareMessage.value = e.message || 'Mislukt.'
+  } finally {
+    shareBusy.value = false
+  }
+}
 
 async function loadTrack() {
   if (!trackId.value || !projectId.value) return
@@ -356,6 +393,26 @@ watch(track, (t) => {
 
 <style scoped>
 .track-screen .header { margin-bottom: 1.5rem; }
+.header-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.share-actions { max-width: 22rem; text-align: right; }
+.btn-share {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.9rem;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-share:hover:not(:disabled) { background: #e5e7eb; }
+.btn-share:disabled { opacity: 0.6; cursor: not-allowed; }
+.share-msg { margin: 0.5rem 0 0; font-size: 0.8rem; color: #059669; word-break: break-all; }
 .back { display: inline-block; margin-bottom: 0.5rem; font-size: 0.9rem; color: #6b7280; }
 .back:hover { color: #374151; }
 .track-screen h2 { margin: 0 0 0.25rem; }

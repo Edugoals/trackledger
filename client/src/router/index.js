@@ -10,6 +10,7 @@ const routes = [
   { path: '/projects/:projectId/tracks/:trackId', name: 'track', component: () => import('../views/TrackScreen.vue'), meta: { title: 'Track' } },
   { path: '/customers', name: 'customers', component: () => import('../views/CustomersView.vue'), meta: { title: 'Customers' } },
   { path: '/tasks', name: 'tasks', component: () => import('../views/TasksView.vue'), meta: { title: 'Task Library' } },
+  { path: '/share/track/:token', name: 'trackShare', component: () => import('../views/TrackShareView.vue'), meta: { title: 'Gedeeld plan', public: true } },
 ]
 
 const router = createRouter({
