@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { suggestTrackTaskFromTitle } from '../services/eventAssignment.js';
 import { syncDeadlineToGoogle, removeDeadlineFromGoogle } from '../services/deadlineSync.js';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { buildAgreementPreviewData } from '../services/agreementPreview.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -109,6 +110,19 @@ router.get('/tracks/:trackId/tasks', ensureTrackAccess, async (req, res) => {
 
     const aggregation = computeTrackAggregation(trackTasks, eventDerivedActuals, unmappedMinutes);
     res.json({ trackTasks: outTrackTasks, aggregation });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/tracks/:trackId/agreement-preview', ensureTrackAccess, async (req, res) => {
+  try {
+    const data = await buildAgreementPreviewData(prisma, {
+      userId: req.session.userId,
+      trackId: req.track.id,
+    });
+    if (!data) return res.status(404).json({ error: 'Track niet gevonden' });
+    res.json(data);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

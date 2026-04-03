@@ -11,6 +11,12 @@
             <p class="project-name">{{ projectName }}</p>
           </div>
           <div class="share-actions">
+            <router-link
+              :to="{ name: 'trackAgreement', params: { projectId: projectId, trackId: trackId } }"
+              class="btn-agreement"
+            >
+              Preview overeenkomst
+            </router-link>
             <button type="button" class="btn-share" :disabled="shareBusy" @click="createCustomerShareLink">
               {{ shareBusy ? 'Bezig…' : 'Link voor klant' }}
             </button>
@@ -42,7 +48,10 @@
           @reorder="onTrackTasksReorder"
           @insert-from-library="onInsertFromLibrary"
         />
-        <TrackInsightsPanel :aggregation="aggregation" />
+        <div class="side-stack">
+          <TrackPricingPanel :track="track" @saved="onPricingSaved" />
+          <TrackInsightsPanel :aggregation="aggregation" />
+        </div>
       </div>
       <MappedEventsSection
         v-if="track"
@@ -103,6 +112,7 @@ import { api } from '../api'
 import TaskLibrary from '../components/TaskLibrary.vue'
 import TrackTaskList from '../components/TrackTaskList.vue'
 import TrackInsightsPanel from '../components/TrackInsightsPanel.vue'
+import TrackPricingPanel from '../components/TrackPricingPanel.vue'
 import MappedEventsSection from '../components/MappedEventsSection.vue'
 import { headerContext } from '../stores/headerContext'
 
@@ -139,6 +149,15 @@ const availableTasks = computed(() => {
 })
 
 const usedTaskIds = computed(() => trackTasks.value.map(tt => tt.taskId))
+
+function onPricingSaved(updated) {
+  if (!track.value || !updated) return
+  track.value = {
+    ...track.value,
+    ...updated,
+    customer: track.value.customer,
+  }
+}
 
 async function createCustomerShareLink() {
   if (!trackId.value) return
@@ -400,7 +419,20 @@ watch(track, (t) => {
   justify-content: space-between;
   gap: 1rem;
 }
-.share-actions { max-width: 22rem; text-align: right; }
+.share-actions { max-width: 22rem; text-align: right; display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: flex-end; align-items: center; }
+.btn-agreement {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.9rem;
+  background: #fff;
+  color: #213547;
+  border: 1px solid #213547;
+  border-radius: 6px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-agreement:hover {
+  background: #f0f4f8;
+}
 .btn-share {
   padding: 0.4rem 0.75rem;
   font-size: 0.9rem;
@@ -419,9 +451,14 @@ watch(track, (t) => {
 .project-name { margin: 0; font-size: 0.95rem; color: #6b7280; }
 .columns {
   display: grid;
-  grid-template-columns: 240px 1fr 220px;
+  grid-template-columns: 240px 1fr minmax(220px, 260px);
   gap: 1.5rem;
   align-items: start;
+}
+.side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 @media (max-width: 900px) {
   .columns { grid-template-columns: 1fr; }

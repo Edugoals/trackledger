@@ -77,6 +77,59 @@ router.put('/:id', ensureTrackAccess, async (req, res) => {
   }
 });
 
+/** Partial update: pricing fields (and optional name). */
+router.patch('/:id', ensureTrackAccess, async (req, res) => {
+  const { name, agreedPrice, currency, pricingNotes, isPriceFinal } = req.body || {};
+  const data = {};
+
+  if (name !== undefined) {
+    if (typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'name mag niet leeg zijn' });
+    }
+    data.name = name.trim();
+  }
+
+  if (agreedPrice !== undefined) {
+    if (agreedPrice === null || agreedPrice === '') {
+      data.agreedPrice = null;
+    } else {
+      const n = parseFloat(agreedPrice);
+      if (isNaN(n) || n < 0) return res.status(400).json({ error: 'agreedPrice moet een getal ≥ 0 zijn' });
+      data.agreedPrice = n;
+    }
+  }
+
+  if (currency !== undefined) {
+    const c = String(currency || 'EUR').trim().toUpperCase();
+    if (c.length > 8) return res.status(400).json({ error: 'currency te lang' });
+    data.currency = c || 'EUR';
+  }
+
+  if (pricingNotes !== undefined) {
+    data.pricingNotes =
+      pricingNotes == null || pricingNotes === '' ? null : String(pricingNotes).trim();
+  }
+
+  if (isPriceFinal !== undefined) {
+    data.isPriceFinal = !!isPriceFinal;
+  }
+
+  if (Object.keys(data).length === 0) {
+    return res.status(400).json({ error: 'Geen velden om bij te werken' });
+  }
+
+  try {
+    const updated = await prisma.track.update({
+      where: { id: req.track.id, userId: req.session.userId },
+      data,
+    });
+    res.json(updated);
+  } catch (e) {
+    if (e.code === 'P2002') return res.status(400).json({ error: 'Tracknaam bestaat al voor deze klant' });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.delete('/:id', ensureTrackAccess, async (req, res) => {
   try {
     await prisma.track.delete({ where: { id: req.track.id, userId: req.session.userId } });

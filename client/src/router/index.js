@@ -7,6 +7,7 @@ const routes = [
   { path: '/', redirect: (to) => ({ path: '/projects', query: to.query }) },
   { path: '/projects', name: 'projects', component: () => import('../views/ProjectsOverview.vue'), meta: { title: 'Projects' } },
   { path: '/projects/:projectId', name: 'project', component: () => import('../views/ProjectDetail.vue'), meta: { title: 'Project' } },
+  { path: '/projects/:projectId/tracks/:trackId/agreement', name: 'trackAgreement', component: () => import('../views/TrackAgreementView.vue'), meta: { title: 'Projectovereenkomst' } },
   { path: '/projects/:projectId/tracks/:trackId', name: 'track', component: () => import('../views/TrackScreen.vue'), meta: { title: 'Track' } },
   { path: '/customers', name: 'customers', component: () => import('../views/CustomersView.vue'), meta: { title: 'Customers' } },
   { path: '/tasks', name: 'tasks', component: () => import('../views/TasksView.vue'), meta: { title: 'Task Library' } },
