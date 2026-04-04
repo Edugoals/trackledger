@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { requireAuth } from '../middleware/requireAuth.js';
+import { createAgreementSnapshot } from '../services/agreementSnapshot.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -67,6 +68,33 @@ async function addJobStats(jobs, currentUserId) {
   }
   return result;
 }
+
+/** Project (job) + track: zelfde snapshot als POST /api/tracks/:trackId/agreements */
+router.post('/:id/tracks/:trackId/agreements', ensureJobAccess, async (req, res) => {
+  const trackId = parseInt(req.params.trackId, 10);
+  if (Number.isNaN(trackId)) return res.status(400).json({ error: 'Ongeldige track' });
+  const track = await prisma.track.findFirst({
+    where: { id: trackId, jobId: req.job.id, userId: req.session.userId },
+  });
+  if (!track) return res.status(404).json({ error: 'Track niet gevonden' });
+  try {
+    const created = await createAgreementSnapshot(prisma, {
+      userId: req.session.userId,
+      trackId: track.id,
+    });
+    if (!created) return res.status(404).json({ error: 'Track niet gevonden' });
+    res.status(201).json({
+      id: created.id,
+      trackId: created.trackId,
+      version: created.version,
+      status: created.status,
+      createdAt: created.createdAt,
+      sentAt: created.sentAt,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 router.get('/:id', ensureJobAccess, async (req, res) => {
   const job = await prisma.job.findUnique({

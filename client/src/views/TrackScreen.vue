@@ -17,6 +17,14 @@
             >
               Preview overeenkomst
             </router-link>
+            <button
+              type="button"
+              class="btn-agreement-solid"
+              :disabled="agreementBusy"
+              @click="createAgreementVersion"
+            >
+              {{ agreementBusy ? 'Bezig…' : 'Versie vastleggen' }}
+            </button>
             <button type="button" class="btn-share" :disabled="shareBusy" @click="createCustomerShareLink">
               {{ shareBusy ? 'Bezig…' : 'Link voor klant' }}
             </button>
@@ -24,6 +32,61 @@
           </div>
         </div>
       </header>
+
+      <section v-if="track" class="agreements-section">
+        <h3 class="agreements-title">Overeenkomsten</h3>
+        <p class="agreements-hint">
+          Preview is live; vastgelegde versies wijzigen niet. PDF en mail gebruiken alleen een snapshot.
+        </p>
+        <table v-if="agreements.length" class="agreements-table">
+          <thead>
+            <tr>
+              <th>Versie</th>
+              <th>Status</th>
+              <th>Aangemaakt</th>
+              <th>Verzonden</th>
+              <th class="agreements-actions">Acties</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="a in agreements" :key="a.id">
+              <td>{{ a.version }}</td>
+              <td>{{ agreementStatusLabel(a.status) }}</td>
+              <td>{{ formatDateTime(a.createdAt) }}</td>
+              <td>{{ a.sentAt ? formatDateTime(a.sentAt) : '—' }}</td>
+              <td class="agreements-actions">
+                <router-link
+                  :to="{
+                    name: 'trackAgreementSnapshot',
+                    params: { projectId: projectId, trackId: trackId, agreementId: a.id },
+                  }"
+                  class="agreements-link"
+                >
+                  Bekijk
+                </router-link>
+                <button
+                  type="button"
+                  class="agreements-btn"
+                  :disabled="agreementActionId === a.id"
+                  @click="downloadAgreementPdf(a)"
+                >
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  class="agreements-btn"
+                  :disabled="agreementActionId === a.id"
+                  @click="sendAgreementToClient(a)"
+                >
+                  Mail
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="agreements-empty">Nog geen vastgelegde versies. Gebruik “Versie vastleggen”.</p>
+      </section>
+
       <div class="columns">
         <TaskLibrary
           :tasks="tasks"
@@ -143,6 +206,10 @@ const customTaskHours = ref('')
 const shareBusy = ref(false)
 const shareMessage = ref('')
 
+const agreements = ref([])
+const agreementBusy = ref(false)
+const agreementActionId = ref(null)
+
 const availableTasks = computed(() => {
   const used = new Set(trackTasks.value.map(tt => tt.taskId))
   return tasks.value.filter(t => !used.has(t.id))
@@ -156,6 +223,88 @@ function onPricingSaved(updated) {
     ...track.value,
     ...updated,
     customer: track.value.customer,
+  }
+}
+
+function agreementStatusLabel(s) {
+  if (s === 'finalized') return 'Vastgelegd'
+  if (s === 'sent') return 'Verzonden'
+  return s
+}
+
+function formatDateTime(iso) {
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+  } catch {
+    return iso
+  }
+}
+
+async function loadAgreements() {
+  if (!trackId.value) return
+  try {
+    const r = await api(`/api/tracks/${trackId.value}/agreements`)
+    if (r.ok) {
+      const d = await r.json()
+      agreements.value = d.agreements || []
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function createAgreementVersion() {
+  if (!trackId.value) return
+  agreementBusy.value = true
+  try {
+    const r = await api(`/api/tracks/${trackId.value}/agreements`, { method: 'POST' })
+    const body = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      alert(body.error || 'Versie vastleggen mislukt.')
+      return
+    }
+    await loadAgreements()
+  } catch (e) {
+    alert(e.message || 'Mislukt')
+  } finally {
+    agreementBusy.value = false
+  }
+}
+
+async function downloadAgreementPdf(a) {
+  agreementActionId.value = a.id
+  try {
+    const r = await api(`/api/agreements/${a.id}/pdf`)
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      alert(err.error || 'PDF download mislukt.')
+      return
+    }
+    const blob = await r.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `projectovereenkomst-v${a.version}.pdf`
+    link.click()
+    URL.revokeObjectURL(url)
+  } finally {
+    agreementActionId.value = null
+  }
+}
+
+async function sendAgreementToClient(a) {
+  if (!confirm('Mail met PDF naar de klant van deze snapshot versturen?')) return
+  agreementActionId.value = a.id
+  try {
+    const r = await api(`/api/agreements/${a.id}/send`, { method: 'POST' })
+    const body = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      alert(body.error || 'Verzenden mislukt.')
+      return
+    }
+    await loadAgreements()
+  } finally {
+    agreementActionId.value = null
   }
 }
 
@@ -198,6 +347,7 @@ async function loadTrack() {
     const t = job.tracks?.find(tr => tr.id === tid)
     track.value = t ? { ...t, customer: job.customer } : null
     if (!track.value) error.value = 'Track not found'
+    else await loadAgreements()
   } catch (e) {
     error.value = e.message
   }
@@ -399,6 +549,7 @@ watch(trackId, () => {
   loadTrack()
   loadTrackTasks()
   loadTrackEvents()
+  loadAgreements()
 })
 
 watch(track, (t) => {
@@ -406,6 +557,7 @@ watch(track, (t) => {
   if (t) {
     loadTrackTasks()
     loadTrackEvents()
+    loadAgreements()
   }
 })
 </script>
@@ -432,6 +584,84 @@ watch(track, (t) => {
 }
 .btn-agreement:hover {
   background: #f0f4f8;
+}
+.btn-agreement-solid {
+  padding: 0.4rem 0.75rem;
+  font-size: 0.9rem;
+  background: #213547;
+  color: #fff;
+  border: 1px solid #213547;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-agreement-solid:hover:not(:disabled) {
+  background: #1a2a3a;
+}
+.btn-agreement-solid:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.agreements-section {
+  margin-bottom: 1.5rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+.agreements-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
+}
+.agreements-hint {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+.agreements-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.agreements-table th,
+.agreements-table td {
+  border: 1px solid #e5e7eb;
+  padding: 0.45rem 0.5rem;
+  text-align: left;
+}
+.agreements-table th {
+  background: #f9fafb;
+  font-weight: 600;
+  color: #4b5563;
+}
+.agreements-actions {
+  white-space: nowrap;
+}
+.agreements-link {
+  color: #213547;
+  margin-right: 0.5rem;
+  font-size: 0.85rem;
+}
+.agreements-btn {
+  margin-right: 0.35rem;
+  padding: 0.2rem 0.45rem;
+  font-size: 0.8rem;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.agreements-btn:hover:not(:disabled) {
+  background: #f9fafb;
+}
+.agreements-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.agreements-empty {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #6b7280;
 }
 .btn-share {
   padding: 0.4rem 0.75rem;

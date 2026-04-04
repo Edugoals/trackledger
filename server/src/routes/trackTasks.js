@@ -4,6 +4,7 @@ import { suggestTrackTaskFromTitle } from '../services/eventAssignment.js';
 import { syncDeadlineToGoogle, removeDeadlineFromGoogle } from '../services/deadlineSync.js';
 import { requireAuth } from '../middleware/requireAuth.js';
 import { buildAgreementPreviewData } from '../services/agreementPreview.js';
+import { createAgreementSnapshot } from '../services/agreementSnapshot.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -123,6 +124,39 @@ router.get('/tracks/:trackId/agreement-preview', ensureTrackAccess, async (req, 
     });
     if (!data) return res.status(404).json({ error: 'Track niet gevonden' });
     res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.get('/tracks/:trackId/agreements', ensureTrackAccess, async (req, res) => {
+  try {
+    const agreements = await prisma.agreement.findMany({
+      where: { trackId: req.track.id, userId: req.session.userId },
+      orderBy: { version: 'desc' },
+      select: { id: true, version: true, status: true, createdAt: true, sentAt: true },
+    });
+    res.json({ agreements });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/tracks/:trackId/agreements', ensureTrackAccess, async (req, res) => {
+  try {
+    const created = await createAgreementSnapshot(prisma, {
+      userId: req.session.userId,
+      trackId: req.track.id,
+    });
+    if (!created) return res.status(404).json({ error: 'Track niet gevonden' });
+    res.status(201).json({
+      id: created.id,
+      trackId: created.trackId,
+      version: created.version,
+      status: created.status,
+      createdAt: created.createdAt,
+      sentAt: created.sentAt,
+    });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
