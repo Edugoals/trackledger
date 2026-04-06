@@ -6,11 +6,20 @@
         <button
           type="button"
           class="btn-sync"
-          :disabled="syncing || !canSync"
+          :disabled="syncing || !canSyncGoogle"
           @click="$emit('sync')"
-          title="Sync Google-agenda van deze klant"
+          title="Haalt wijzigingen uit Google naar TrackLedger (events & deadline-events)"
         >
-          {{ syncing ? 'Sync...' : 'Sync Google' }}
+          {{ syncing ? '…' : 'Sync van Google' }}
+        </button>
+        <button
+          type="button"
+          class="btn-push"
+          :disabled="pushing || !canPushDeadlines"
+          @click="$emit('push-deadlines')"
+          title="Zet deadlines die alleen in TrackLedger staan naar je Google-agenda"
+        >
+          {{ pushing ? '…' : 'Deadlines → Google' }}
         </button>
         <button type="button" class="btn-add" @click="$emit('add-task')">+ Add Task</button>
       </div>
@@ -46,6 +55,8 @@
         <TrackTaskCard
           :track-task="tt"
           :mapped-events="(events || []).filter(e => e.assignedTrackTaskId === tt.id)"
+          :google-connected="googleConnected"
+          :customer-has-calendar="customerHasCalendar"
           @update="(patch) => $emit('update', tt, patch)"
           @edit-notes="$emit('edit-notes', tt)"
           @remove="$emit('remove', tt)"
@@ -67,10 +78,15 @@ const props = defineProps({
   events: { type: Array, default: () => [] },
   loading: { type: Boolean, default: false },
   syncing: { type: Boolean, default: false },
-  canSync: { type: Boolean, default: false },
+  /** Google OAuth + agenda voor klant: sync van Google mogelijk */
+  canSyncGoogle: { type: Boolean, default: false },
+  pushing: { type: Boolean, default: false },
+  canPushDeadlines: { type: Boolean, default: false },
+  googleConnected: { type: Boolean, default: false },
+  customerHasCalendar: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign', 'sync', 'reorder', 'insert-from-library'])
+const emit = defineEmits(['add-task', 'update', 'edit-notes', 'remove', 'unassign', 'sync', 'push-deadlines', 'reorder', 'insert-from-library'])
 
 const listRef = ref(null)
 let sortable = null
@@ -194,6 +210,17 @@ onUnmounted(destroySortable)
 }
 .btn-sync:hover:not(:disabled) { background: #f3f4f6; border-color: #9ca3af; }
 .btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-push {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  background: #fff;
+  color: #213547;
+  border: 1px solid #213547;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.btn-push:hover:not(:disabled) { background: #f0f4f8; }
+.btn-push:disabled { opacity: 0.5; cursor: not-allowed; }
 .loading { font-size: 0.9rem; color: #6b7280; padding: 1rem 0; }
 .list { display: flex; flex-direction: column; min-height: 80px; }
 .drop-placeholder {

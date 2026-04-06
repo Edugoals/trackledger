@@ -9,6 +9,12 @@
     <div class="deadline-section">
       <template v-if="trackTask.deadlineAt">
         <span :class="['deadline-badge', deadlineStatusClass]" :title="deadlineStatusLabel">📅 {{ formatDeadline(trackTask.deadlineAt) }}</span>
+        <span
+          v-if="deadlineGoogleBadge"
+          class="gcal-badge"
+          :class="'gcal-' + deadlineGoogleBadge.kind"
+          :title="deadlineGoogleBadge.title"
+        >{{ deadlineGoogleBadge.short }}</span>
         <button type="button" class="btn-deadline" @click="showDeadlinePicker = true">Edit</button>
         <button type="button" class="btn-deadline" @click="$emit('update', { deadlineAt: null })">Remove</button>
         <span v-if="trackTask.deadlineSyncStatus === 'ERROR'" class="sync-error" :title="trackTask.deadlineSyncError">⚠</span>
@@ -85,6 +91,10 @@ import { formatHours, formatDate, formatShortDate, overrunStatus } from '../util
 const props = defineProps({
   trackTask: { type: Object, required: true },
   mappedEvents: { type: Array, default: () => [] },
+  /** Zelfde bron als /api/auth/me — Google OAuth voor Calendar */
+  googleConnected: { type: Boolean, default: false },
+  /** Klant heeft een gekozen Google-agenda */
+  customerHasCalendar: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update', 'edit-notes', 'remove', 'unassign'])
@@ -109,6 +119,52 @@ const deadlineStatusLabel = computed(() => {
   if (deadlineStatusClass.value === 'overdue') return 'Overdue'
   if (deadlineStatusClass.value === 'today') return 'Due today'
   return 'Upcoming'
+})
+
+/** Compacte Google-deadline status; alleen zinvol als er een deadline is */
+const deadlineGoogleBadge = computed(() => {
+  const tt = props.trackTask
+  if (!tt.deadlineAt) return null
+  if (!props.googleConnected) {
+    return {
+      kind: 'muted',
+      short: 'Geen Google',
+      title: 'Google Calendar is niet gekoppeld aan je account. Deadline staat alleen in TrackLedger.',
+    }
+  }
+  if (!props.customerHasCalendar) {
+    return {
+      kind: 'muted',
+      short: 'Geen agenda',
+      title: 'Kies een Google-agenda voor deze klant (klantenpagina). Deadline staat nu alleen in TrackLedger.',
+    }
+  }
+  if (tt.deadlineSyncStatus === 'ERROR' && tt.deadlineSyncError) {
+    return {
+      kind: 'warn',
+      short: tt.deadlineGoogleEventId ? 'Sync-fout' : 'Niet in Google',
+      title: tt.deadlineSyncError,
+    }
+  }
+  if (tt.deadlineGoogleEventId && (tt.deadlineSyncStatus === 'SYNCED' || tt.deadlineSyncStatus === 'PENDING')) {
+    return {
+      kind: 'ok',
+      short: 'In Google',
+      title: 'Deze deadline staat als event in je gekoppelde Google-agenda.',
+    }
+  }
+  if (tt.deadlineGoogleEventId) {
+    return {
+      kind: 'ok',
+      short: 'In Google',
+      title: 'Gekoppeld aan Google Calendar.',
+    }
+  }
+  return {
+    kind: 'warn',
+    short: 'Niet in Google',
+    title: 'Deadline staat nog niet in Google. Gebruik “Deadlines → Google” op dit track.',
+  }
 })
 
 function formatDeadline(d) {
@@ -295,4 +351,16 @@ function onStatusChange(e) {
 .deadline-picker { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.35rem; }
 .deadline-input { padding: 0.25rem 0.4rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.85rem; }
 .sync-error { color: #dc2626; font-size: 0.9rem; }
+.gcal-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0.12rem 0.35rem;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+.gcal-ok { background: #d1fae5; color: #065f46; }
+.gcal-warn { background: #fef3c7; color: #92400e; }
+.gcal-muted { background: #f3f4f6; color: #6b7280; }
 </style>

@@ -5,6 +5,7 @@ import { syncDeadlineToGoogle, removeDeadlineFromGoogle } from '../services/dead
 import { requireAuth } from '../middleware/requireAuth.js';
 import { buildAgreementPreviewData } from '../services/agreementPreview.js';
 import { createAgreementSnapshot } from '../services/agreementSnapshot.js';
+import { pushMissingDeadlinesToTrackGoogle } from '../services/deadlinePush.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -158,6 +159,23 @@ router.post('/tracks/:trackId/agreements', ensureTrackAccess, async (req, res) =
       sentAt: created.sentAt,
     });
   } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/** Bewuste push: lokale deadlines zonder Google-event naar Calendar (geen bulk op achtergrond). */
+router.post('/tracks/:trackId/deadlines/push-to-google', ensureTrackAccess, async (req, res) => {
+  try {
+    const result = await pushMissingDeadlinesToTrackGoogle(prisma, {
+      userId: req.session.userId,
+      trackId: req.track.id,
+    });
+    res.json(result);
+  } catch (e) {
+    if (e.code === 'NO_GOOGLE' || e.code === 'NO_CALENDAR') {
+      return res.status(400).json({ error: e.message });
+    }
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message });
     res.status(500).json({ error: e.message });
   }
 });

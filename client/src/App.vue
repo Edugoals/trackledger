@@ -75,7 +75,9 @@ const customers = ref([])
 const googleBanner = computed(() => {
   const g = route.query.google
   const reason = route.query.reason
-  if (g === 'connected') return 'Google Calendar is gekoppeld.'
+  if (g === 'connected') {
+    return 'Google Calendar is gekoppeld. Hadden al deadlines in TrackLedger? Open een track en klik op "Deadlines → Google" om ze naar je agenda te zetten (dat is iets anders dan "Sync van Google").'
+  }
   if (g === 'need_login') return 'Log eerst in om Google te koppelen.'
   if (g === 'conflict') return 'Dit Google-account is al aan een ander profiel gekoppeld.'
   if (g === 'error') {

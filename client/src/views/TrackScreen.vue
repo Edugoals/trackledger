@@ -33,6 +33,22 @@
         </div>
       </header>
 
+      <p
+        v-if="track && deadlinesNeedingAttention"
+        class="deadline-push-hint"
+      >
+        <template v-if="canPushDeadlines">
+          Er staan nog {{ pendingDeadlinesForPush }} deadline(s) die niet in Google staan. Gebruik
+          <strong>Deadlines → Google</strong> om ze naar je agenda te zetten.
+        </template>
+        <template v-else-if="pendingDeadlinesForPush > 0 && !googleConnected">
+          Je hebt deadlines die alleen in TrackLedger staan. Koppel <strong>Google Calendar</strong> (bovenin) om ze naar je agenda te kunnen sturen.
+        </template>
+        <template v-else-if="pendingDeadlinesForPush > 0 && !customerHasCalendar">
+          Kies een <strong>Google-agenda voor deze klant</strong> (klantenpagina) om deadlines naar Google te kunnen pushen.
+        </template>
+      </p>
+
       <section v-if="track" class="agreements-section">
         <h3 class="agreements-title">Overeenkomsten</h3>
         <p class="agreements-hint">
@@ -101,8 +117,13 @@
           :events="trackEvents"
           :loading="trackTasksLoading"
           :syncing="syncing"
-          :can-sync="!!(track?.customer?.selectedCalendarId)"
+          :can-sync-google="calendarSyncAvailable"
+          :pushing="pushingDeadlines"
+          :can-push-deadlines="canPushDeadlines"
+          :google-connected="googleConnected"
+          :customer-has-calendar="customerHasCalendar"
           @sync="syncGoogle"
+          @push-deadlines="pushDeadlinesToGoogle"
           @add-task="showAddTask = true"
           @update="updateTrackTask"
           @edit-notes="openNotesEdit"
@@ -178,6 +199,7 @@ import TrackInsightsPanel from '../components/TrackInsightsPanel.vue'
 import TrackPricingPanel from '../components/TrackPricingPanel.vue'
 import MappedEventsSection from '../components/MappedEventsSection.vue'
 import { headerContext } from '../stores/headerContext'
+import { authUser } from '../auth'
 
 const route = useRoute()
 const projectId = computed(() => route.params.projectId)
@@ -209,6 +231,22 @@ const shareMessage = ref('')
 const agreements = ref([])
 const agreementBusy = ref(false)
 const agreementActionId = ref(null)
+
+const pushingDeadlines = ref(false)
+
+const googleConnected = computed(() => !!authUser.value?.googleConnected)
+const customerHasCalendar = computed(() => !!track.value?.customer?.selectedCalendarId)
+const calendarSyncAvailable = computed(() => googleConnected.value && customerHasCalendar.value)
+
+const pendingDeadlinesForPush = computed(() =>
+  trackTasks.value.filter((tt) => tt.deadlineAt && !tt.deadlineGoogleEventId).length
+)
+
+const canPushDeadlines = computed(
+  () => calendarSyncAvailable.value && pendingDeadlinesForPush.value > 0
+)
+
+const deadlinesNeedingAttention = computed(() => pendingDeadlinesForPush.value > 0)
 
 const availableTasks = computed(() => {
   const used = new Set(trackTasks.value.map(tt => tt.taskId))
@@ -402,6 +440,38 @@ async function syncGoogle() {
   syncing.value = false
 }
 
+async function pushDeadlinesToGoogle() {
+  if (!trackId.value) return
+  pushingDeadlines.value = true
+  try {
+    const r = await api(`/api/tracks/${trackId.value}/deadlines/push-to-google`, { method: 'POST' })
+    const body = await r.json().catch(() => ({}))
+    if (!r.ok) {
+      alert(body.error || 'Mislukt')
+      return
+    }
+    await loadTrackTasks()
+    if (body.failed > 0) {
+      const detail = (body.failures || []).map((f) => f.error).join('; ')
+      alert(
+        `${body.pushed} deadline(s) naar Google gezet. ${body.failed} mislukt.${detail ? ' ' + detail : ''}`
+      )
+    }
+  } catch (e) {
+    alert(e.message || 'Mislukt')
+  } finally {
+    pushingDeadlines.value = false
+  }
+}
+
+function onGlobalSyncDone(ev) {
+  const cid = ev.detail?.customerId
+  if (cid != null && track.value?.customerId === cid) {
+    loadTrackTasks()
+    loadTrackEvents()
+  }
+}
+
 async function assignEvent({ eventId, assignedTrackTaskId }) {
   const body = assignedTrackTaskId != null ? { assignedTrackTaskId } : { assignedTrackTaskId: null }
   const r = await api(`/api/events/${eventId}/assignment`, {
@@ -543,6 +613,11 @@ async function onInsertFromLibrary({ taskId, defaultEstimatedHours, insertIndex 
 onMounted(() => {
   loadTasks()
   loadTrack()
+  window.addEventListener('trackledger-sync-done', onGlobalSyncDone)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('trackledger-sync-done', onGlobalSyncDone)
 })
 
 watch(trackId, () => {
@@ -563,6 +638,16 @@ watch(track, (t) => {
 </script>
 
 <style scoped>
+.deadline-push-hint {
+  margin: 0 0 1rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem;
+  color: #374151;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  line-height: 1.45;
+}
 .track-screen .header { margin-bottom: 1.5rem; }
 .header-main {
   display: flex;
