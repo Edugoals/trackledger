@@ -11,6 +11,7 @@
         <span>Hallo, {{ authUser.name || authUser.email }}</span>
         <nav class="nav">
           <router-link to="/projects" class="nav-link">Projects</router-link>
+          <router-link to="/planning" class="nav-link">Planning</router-link>
           <router-link to="/customers" class="nav-link">Customers</router-link>
           <router-link to="/tasks" class="nav-link">Tasks</router-link>
         </nav>

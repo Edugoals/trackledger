@@ -68,6 +68,9 @@ model Track {
   customer   Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
   userId     Int
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Expliciete trackplanning (optioneel)
+  startDate     DateTime?
+  targetEndDate DateTime?
   trackTasks TrackTask[]
   agreements Agreement[]
   share      TrackShare?

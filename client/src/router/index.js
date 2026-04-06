@@ -6,6 +6,7 @@ const routes = [
   { path: '/register', name: 'register', component: () => import('../views/RegisterView.vue'), meta: { title: 'Registreren', public: true } },
   { path: '/', redirect: (to) => ({ path: '/projects', query: to.query }) },
   { path: '/projects', name: 'projects', component: () => import('../views/ProjectsOverview.vue'), meta: { title: 'Projects' } },
+  { path: '/planning', name: 'planning', component: () => import('../views/PlanningView.vue'), meta: { title: 'Planning' } },
   { path: '/projects/:projectId', name: 'project', component: () => import('../views/ProjectDetail.vue'), meta: { title: 'Project' } },
   {
     path: '/projects/:projectId/tracks/:trackId/agreement/:agreementId',

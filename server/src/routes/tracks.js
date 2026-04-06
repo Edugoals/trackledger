@@ -38,8 +38,16 @@ router.get('/', async (req, res) => {
   }
 });
 
+function parseOptionalDate(val) {
+  if (val === undefined) return undefined;
+  if (val === null || val === '') return null;
+  const d = new Date(val);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
 router.post('/', async (req, res) => {
-  const { jobId, name } = req.body;
+  const { jobId, name, startDate, targetEndDate } = req.body;
   if (!jobId || !name?.trim()) return res.status(400).json({ error: 'jobId en name verplicht' });
   const job = await prisma.job.findFirst({
     where: { id: parseInt(jobId), userId: req.session.userId },
@@ -47,12 +55,16 @@ router.post('/', async (req, res) => {
   });
   if (!job) return res.status(404).json({ error: 'Opdracht niet gevonden' });
   try {
+    const sd = parseOptionalDate(startDate);
+    const ed = parseOptionalDate(targetEndDate);
     const track = await prisma.track.create({
       data: {
         jobId: job.id,
         customerId: job.customerId,
         userId: job.userId,
         name: name.trim(),
+        ...(sd !== undefined && { startDate: sd }),
+        ...(ed !== undefined && { targetEndDate: ed }),
       },
     });
     res.status(201).json(track);
@@ -77,9 +89,9 @@ router.put('/:id', ensureTrackAccess, async (req, res) => {
   }
 });
 
-/** Partial update: pricing fields (and optional name). */
+/** Partial update: pricing fields (and optional name, planning dates). */
 router.patch('/:id', ensureTrackAccess, async (req, res) => {
-  const { name, agreedPrice, currency, pricingNotes, isPriceFinal } = req.body || {};
+  const { name, agreedPrice, currency, pricingNotes, isPriceFinal, startDate, targetEndDate } = req.body || {};
   const data = {};
 
   if (name !== undefined) {
@@ -112,6 +124,13 @@ router.patch('/:id', ensureTrackAccess, async (req, res) => {
 
   if (isPriceFinal !== undefined) {
     data.isPriceFinal = !!isPriceFinal;
+  }
+
+  if (startDate !== undefined) {
+    data.startDate = parseOptionalDate(startDate);
+  }
+  if (targetEndDate !== undefined) {
+    data.targetEndDate = parseOptionalDate(targetEndDate);
   }
 
   if (Object.keys(data).length === 0) {

@@ -133,6 +133,7 @@
           @insert-from-library="onInsertFromLibrary"
         />
         <div class="side-stack">
+          <TrackPlanningPanel :track="track" @saved="onPlanningSaved" />
           <TrackPricingPanel :track="track" @saved="onPricingSaved" />
           <TrackInsightsPanel :aggregation="aggregation" />
         </div>
@@ -197,6 +198,7 @@ import TaskLibrary from '../components/TaskLibrary.vue'
 import TrackTaskList from '../components/TrackTaskList.vue'
 import TrackInsightsPanel from '../components/TrackInsightsPanel.vue'
 import TrackPricingPanel from '../components/TrackPricingPanel.vue'
+import TrackPlanningPanel from '../components/TrackPlanningPanel.vue'
 import MappedEventsSection from '../components/MappedEventsSection.vue'
 import { headerContext } from '../stores/headerContext'
 import { authUser } from '../auth'
@@ -256,6 +258,15 @@ const availableTasks = computed(() => {
 const usedTaskIds = computed(() => trackTasks.value.map(tt => tt.taskId))
 
 function onPricingSaved(updated) {
+  if (!track.value || !updated) return
+  track.value = {
+    ...track.value,
+    ...updated,
+    customer: track.value.customer,
+  }
+}
+
+function onPlanningSaved(updated) {
   if (!track.value || !updated) return
   track.value = {
     ...track.value,

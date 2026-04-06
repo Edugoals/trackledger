@@ -10,6 +10,7 @@ import tracksRoutes from './routes/tracks.js';
 import tasksRoutes from './routes/tasks.js';
 import trackTasksRoutes from './routes/trackTasks.js';
 import agreementsRoutes from './routes/agreements.js';
+import planningRoutes from './routes/planning.js';
 import publicTrackShareRoutes from './routes/publicTrackShare.js';
 import { isGoogleOAuthConfigured } from './config/google.js';
 
@@ -53,6 +54,7 @@ app.use('/api/customers', customersRoutes);
 app.use('/api/jobs', jobsRoutes);
 app.use('/api', trackTasksRoutes); // /api/tracks/:trackId/tasks, /api/track-tasks/:id (before /api/tracks)
 app.use('/api/agreements', agreementsRoutes);
+app.use('/api/planning', planningRoutes);
 app.use('/api/tracks', tracksRoutes);
 app.use('/api/tasks', tasksRoutes);
 
