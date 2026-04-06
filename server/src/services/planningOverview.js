@@ -205,6 +205,13 @@ export async function buildPlanningOverview(prisma, userId, opts = {}) {
           end: toISO(e.end),
         }));
 
+      const appointmentsAll = tEvents.map((e) => ({
+        id: e.id,
+        title: e.title,
+        start: toISO(e.start),
+        end: toISO(e.end),
+      }));
+
       const visibleCap = 5;
       const deadlinesVisible = deadlinesDetailed.slice(0, visibleCap);
       const deadlinesHidden = Math.max(0, deadlinesDetailed.length - visibleCap);
@@ -260,6 +267,8 @@ export async function buildPlanningOverview(prisma, userId, opts = {}) {
         deadlinesHidden,
         deadlinesTotal: deadlinesDetailed.length,
         appointmentsPreview: appointmentsDetailed,
+        deadlinesAll: deadlinesDetailed,
+        appointmentsAll,
       });
     }
 

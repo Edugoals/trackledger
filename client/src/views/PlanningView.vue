@@ -1,9 +1,32 @@
 <template>
-  <div class="view planning-view">
+  <div class="view planning-view" :class="{ 'planning-wide': viewMode === 'timeline' }">
     <header class="page-head">
       <h2>Planning</h2>
       <p class="sub">Studio-overzicht van projecten, tracks, deadlines en afspraken.</p>
     </header>
+
+    <div class="view-toggle" role="tablist" aria-label="Weergave">
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="viewMode === 'list'"
+        class="toggle-btn"
+        :class="{ active: viewMode === 'list' }"
+        @click="viewMode = 'list'"
+      >
+        List
+      </button>
+      <button
+        type="button"
+        role="tab"
+        :aria-selected="viewMode === 'timeline'"
+        class="toggle-btn"
+        :class="{ active: viewMode === 'timeline' }"
+        @click="viewMode = 'timeline'"
+      >
+        Timeline
+      </button>
+    </div>
 
     <section class="filters">
       <label class="filter-item">
@@ -85,7 +108,9 @@
         </div>
       </section>
 
-      <section class="card projects">
+      <PlanningTimeline v-if="viewMode === 'timeline'" :projects="planning.projects" />
+
+      <section v-if="viewMode === 'list'" class="card projects">
         <h3>Alle projecten</h3>
         <p v-if="!planning.projects?.length" class="muted">Geen projecten (of geen resultaat na filter).</p>
         <div v-for="proj in planning.projects" :key="proj.id" class="project-block">
@@ -148,6 +173,9 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { api } from '../api'
+import PlanningTimeline from '../components/PlanningTimeline.vue'
+
+const viewMode = ref('list')
 
 const loading = ref(true)
 const error = ref(null)
@@ -226,6 +254,36 @@ watch([status, sort], load)
 .planning-view {
   max-width: 960px;
   margin: 0 auto;
+}
+.planning-view.planning-wide {
+  max-width: min(1200px, 100%);
+}
+.view-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
+}
+.toggle-btn {
+  padding: 0.45rem 1rem;
+  font-size: 0.9rem;
+  border: none;
+  background: #fff;
+  color: #374151;
+  cursor: pointer;
+}
+.toggle-btn + .toggle-btn {
+  border-left: 1px solid #d1d5db;
+}
+.toggle-btn:hover {
+  background: #f9fafb;
+}
+.toggle-btn.active {
+  background: #213547;
+  color: #fff;
 }
 .page-head h2 {
   margin: 0 0 0.25rem;
